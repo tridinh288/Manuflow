@@ -18,6 +18,7 @@ from app.domain.errors import BusinessValidationError, ConflictError, NotFoundEr
 from app.domain.quantities import ensure_scale
 from app.models.master_data import Material, MaterialUnit, Product
 from app.models.work_center import WorkCenter
+from app.repositories.bom_repository import BomRepository
 from app.repositories.master_data_repository import (
     MaterialRepository,
     ProductRepository,
@@ -271,13 +272,24 @@ class MaterialService(_MasterDataService):
         return material
 
     def deactivate(self, material_id: int, actor: Actor, context: RequestContext) -> None:
-        """D-19: refused while an ACTIVE BOM uses the material (guard added with BOMs)."""
+        """D-19: refused while an ACTIVE BOM uses the material.
+
+        The material row lock is the same one BOM activation takes, so a material cannot
+        be deactivated while a BOM using it is being activated, or the reverse.
+        """
         with transaction(self._session):
             material = self._materials.get_for_update(material_id)
             if material is None:
                 raise self._not_found()
             if not material.active:
                 return
+            used_by = BomRepository(self._session).material_in_active_bom(material.id)
+            if used_by:
+                raise ConflictError(
+                    "MATERIAL_IN_USE",
+                    "The material is used by an ACTIVE BOM.",
+                    [{"product_code": code, "bom_version": version} for code, version in used_by],
+                )
             material.active = False
             self._session.flush()
             self._record(

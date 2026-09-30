@@ -22,6 +22,9 @@ class AuditAction(StrEnum):
     MASTER_CREATED = "MASTER_CREATED"
     MASTER_UPDATED = "MASTER_UPDATED"
     MASTER_DEACTIVATED = "MASTER_DEACTIVATED"
+    BOM_CREATED = "BOM_CREATED"
+    BOM_ITEMS_REPLACED = "BOM_ITEMS_REPLACED"
+    BOM_ACTIVATED = "BOM_ACTIVATED"
 
 
 class AuditEntity(StrEnum):
@@ -29,6 +32,7 @@ class AuditEntity(StrEnum):
     PRODUCT = "product"
     MATERIAL = "material"
     WORK_CENTER = "work_center"
+    BOM = "bom"
 
 
 def is_sensitive_key(key: str) -> bool:

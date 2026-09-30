@@ -48,6 +48,10 @@ ENDPOINT_ACCESS: dict[tuple[str, str], AccessRule] = {
     ("POST", "/api/v1/work-centers"): perm(Permission.MASTER_WRITE),
     ("PUT", "/api/v1/work-centers/{work_center_id}"): perm(Permission.MASTER_WRITE),
     ("DELETE", "/api/v1/work-centers/{work_center_id}"): perm(Permission.MASTER_WRITE),
+    ("GET", "/api/v1/products/{product_id}/boms"): perm(Permission.MASTER_READ),
+    ("POST", "/api/v1/products/{product_id}/boms"): perm(Permission.BOM_WRITE),
+    ("PUT", "/api/v1/boms/{bom_id}/items"): perm(Permission.BOM_WRITE),
+    ("POST", "/api/v1/boms/{bom_id}/activate"): perm(Permission.BOM_WRITE),
 }
 
 
@@ -156,6 +160,14 @@ PROTECTED_CALLS: list[Call] = [
     Call("POST", "/api/v1/work-centers", json=lambda n: {"code": f"NEW-W{n}", "name": "W"}),
     Call("PUT", "/api/v1/work-centers/{work_center_id}", json=lambda n: {"name": f"W {n}"}),
     Call("DELETE", "/api/v1/work-centers/{work_center_id}"),
+    Call("GET", "/api/v1/products/{product_id}/boms"),
+    Call("POST", "/api/v1/products/{product_id}/boms"),
+    Call(
+        "PUT",
+        "/api/v1/boms/{bom_id}/items",
+        json=lambda n: {"items": [{"material_id": 0, "qty_per_unit": f"{n}"}]},
+    ),
+    Call("POST", "/api/v1/boms/{bom_id}/activate"),
 ]
 
 
@@ -166,13 +178,19 @@ def test_b4_protected_call_list_covers_every_protected_route() -> None:
 
 
 @pytest.fixture
-def targets(user_factory, product_factory, material_factory, work_center_factory) -> dict[str, int]:
+def targets(
+    user_factory, product_factory, material_factory, work_center_factory, bom_factory
+) -> dict[str, int]:
     """One existing, unused row of each kind for the path parameters."""
+    product = product_factory()
+    component = material_factory()
     return {
         "user_id": user_factory(role=Role.WAREHOUSE).id,
-        "product_id": product_factory().id,
+        "product_id": product.id,
         "material_id": material_factory().id,
         "work_center_id": work_center_factory().id,
+        "bom_id": bom_factory(product, [(component, "2", "0")]).id,
+        "component_id": component.id,
     }
 
 
@@ -181,6 +199,9 @@ def _send(
 ) -> int:
     path = call.path.format(**targets)
     body = call.json(n) if call.json else None
+    if body and "items" in body:  # BOM lines need a real material
+        lines = [{**line, "material_id": targets["component_id"]} for line in body["items"]]
+        body = {"items": lines}
     return client.request(call.method, path, json=body, headers=headers).status_code
 
 

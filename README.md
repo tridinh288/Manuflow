@@ -5,7 +5,8 @@ This project is a student/personal simulation of an internal manufacturing manag
 > Status: **Phase 3 — master data and BOM** (in progress). Done: Phase 1 foundation; Phase 2
 > authentication (JWT, lockout, permission matrix, user admin), append-only audit log and
 > idempotent mutations; products, materials (with their zero inventory balance) and work
-> centers with immutable codes and deactivate-only deletes.
+> centers with immutable codes and deactivate-only deletes; versioned BOMs (DRAFT → ACTIVE →
+> RETIRED, one ACTIVE per product enforced by a generated column and unique index).
 
 ## Quick start
 
