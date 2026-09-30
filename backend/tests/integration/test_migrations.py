@@ -227,3 +227,47 @@ def test_d03_db_allows_only_one_active_routing_per_product(
         db_session.execute(
             text("UPDATE routings SET status = 'ACTIVE' WHERE id = :id"), {"id": second.id}
         )
+
+
+# --- BR-INV-03: the ledger is append-only and self-consistent ---------------------------
+
+LEDGER_INSERT = text(
+    "INSERT INTO inventory_transactions (type, material_id, warehouse_id, on_hand_delta, "
+    "reserved_delta, on_hand_after, reserved_after) VALUES (:type, :material, "
+    "(SELECT id FROM warehouses WHERE code = 'MAIN'), :dh, :dr, :ah, :ar)"
+)
+
+
+def test_br_inv_03_ledger_lines_cannot_be_updated_or_deleted(
+    db_session: Session, material_factory
+) -> None:
+    material = material_factory()
+    with db_session.begin():
+        db_session.execute(
+            LEDGER_INSERT,
+            {"type": "RECEIVE", "material": material.id, "dh": 5, "dr": 0, "ah": 5, "ar": 0},
+        )
+    for statement in (
+        "UPDATE inventory_transactions SET on_hand_delta = 50",
+        "DELETE FROM inventory_transactions",
+    ):
+        with pytest.raises(DBAPIError, match="append-only"), db_session.begin():
+            db_session.execute(text(statement))
+
+
+@pytest.mark.parametrize(
+    ("values", "constraint"),
+    [
+        ({"type": "GIFT", "dh": 1, "dr": 0, "ah": 1, "ar": 0}, "type_valid"),
+        ({"type": "RECEIVE", "dh": 0, "dr": 0, "ah": 0, "ar": 0}, "moves_something"),
+        ({"type": "ADJUSTMENT", "dh": -1, "dr": 0, "ah": -1, "ar": 0}, "on_hand_after"),
+        ({"type": "RESERVE", "dh": 0, "dr": 5, "ah": 3, "ar": 5}, "reserved_after_within"),
+    ],
+    ids=["type", "no-movement", "negative-on-hand", "reserved-above-on-hand"],
+)
+def test_br_inv_03_impossible_ledger_lines_rejected_by_db(
+    db_session: Session, material_factory, values: dict[str, object], constraint: str
+) -> None:
+    material = material_factory()
+    with pytest.raises(DBAPIError, match=constraint), db_session.begin():
+        db_session.execute(LEDGER_INSERT, {"material": material.id, **values})

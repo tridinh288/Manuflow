@@ -12,6 +12,7 @@ from app.domain.errors import AuthenticationError
 from app.services.auth_service import AuthenticatedUser, AuthService
 from app.services.bom_service import BomService
 from app.services.context import RequestContext
+from app.services.inventory_service import InventoryService
 from app.services.master_data_service import MaterialService, ProductService, WorkCenterService
 from app.services.routing_service import RoutingService
 from app.services.user_service import UserService
@@ -93,3 +94,7 @@ def get_routing_service(
     clock: Annotated[Clock, Depends(get_clock)],
 ) -> RoutingService:
     return RoutingService(session, clock)
+
+
+def get_inventory_service(session: Annotated[Session, Depends(get_session)]) -> InventoryService:
+    return InventoryService(session)

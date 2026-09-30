@@ -5,6 +5,7 @@ appear here with the access rule it declares in code, so adding a route without 
 permission (or with the wrong one) fails the build.
 """
 
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Annotated, Any
@@ -57,6 +58,7 @@ ENDPOINT_ACCESS: dict[tuple[str, str], AccessRule] = {
     ("POST", "/api/v1/products/{product_id}/routings"): perm(Permission.ROUTING_WRITE),
     ("PUT", "/api/v1/routings/{routing_id}/steps"): perm(Permission.ROUTING_WRITE),
     ("POST", "/api/v1/routings/{routing_id}/activate"): perm(Permission.ROUTING_WRITE),
+    ("POST", "/api/v1/inventory/receipts"): perm(Permission.INVENTORY_RECEIVE),
 }
 
 
@@ -121,6 +123,7 @@ class Call:
     method: str
     path: str
     json: Callable[[int], dict[str, Any]] | None = None
+    idempotency_key: bool = False  # D-22: the endpoint requires Idempotency-Key
 
 
 PROTECTED_CALLS: list[Call] = [
@@ -188,6 +191,12 @@ PROTECTED_CALLS: list[Call] = [
         },
     ),
     Call("POST", "/api/v1/routings/{routing_id}/activate"),
+    Call(
+        "POST",
+        "/api/v1/inventory/receipts",
+        json=lambda n: {"material_id": 0, "quantity": f"{n}"},
+        idempotency_key=True,
+    ),
 ]
 
 
@@ -229,6 +238,10 @@ def _send(
     body = call.json(n) if call.json else None
     if body and "bom_header_id" in body:  # explode the target's own DRAFT version
         body = {**body, "bom_header_id": targets["bom_id"]}
+    if body and body.get("material_id") == 0:  # a real, active material
+        body = {**body, "material_id": targets["material_id"]}
+    if call.idempotency_key:
+        headers = {**headers, "Idempotency-Key": f"matrix-{uuid.uuid4()}"}
     if body and "steps" in body:  # routing steps need a real work center
         steps = [{**step, "work_center_id": targets["station_id"]} for step in body["steps"]]
         body = {"steps": steps}
