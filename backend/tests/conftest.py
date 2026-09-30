@@ -1,0 +1,159 @@
+"""Shared fixtures.
+
+Unit tests need no database. Integration and API tests run against the real MySQL
+schema built by Alembic (B15: no SQLite, no ``create_all``). Each DB test runs inside an
+outer transaction that is rolled back at the end; the session joins it with SAVEPOINTs,
+so service code can still use ``with session.begin():`` normally.
+"""
+
+import logging
+import os
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+from alembic import command
+from alembic.config import Config
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from pydantic import BaseModel, Field
+from sqlalchemy import Engine
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_session
+from app.core.config import Environment, Settings
+from app.db.session import build_engine
+from app.domain.errors import (
+    BusinessValidationError,
+    ConcurrencyConflictError,
+    ConflictError,
+    DomainError,
+    NotFoundError,
+)
+from app.main import create_app
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+TEST_JWT_SECRET = "test-only-jwt-secret-0123456789abcdef"
+# Port 1 refuses connections immediately: used where no database is expected.
+UNREACHABLE_DB_URL = "mysql+pymysql://nobody:nothing@127.0.0.1:1/none"
+
+
+def _require_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        pytest.fail(
+            f"{name} is not set. DB tests need MySQL: run `docker compose exec api pytest`.",
+            pytrace=False,
+        )
+    return value
+
+
+@pytest.fixture
+def settings() -> Settings:
+    return Settings(
+        env=Environment.TEST,
+        database_url=os.environ.get("TEST_DATABASE_URL", UNREACHABLE_DB_URL),
+        migration_database_url=os.environ.get("TEST_MIGRATION_DATABASE_URL", UNREACHABLE_DB_URL),
+        jwt_secret=TEST_JWT_SECRET,
+        cors_origins=[],
+    )
+
+
+@pytest.fixture
+def app(settings: Settings) -> FastAPI:
+    return create_app(settings)
+
+
+@pytest.fixture
+def client(app: FastAPI) -> Iterator[TestClient]:
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        yield test_client
+
+
+@pytest.fixture(scope="session")
+def migrated_database_url() -> str:
+    """Rebuild the test schema from scratch once per run; also proves downgrade works."""
+    migration_url = _require_env("TEST_MIGRATION_DATABASE_URL")
+    config = Config(str(BACKEND_DIR / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", migration_url.replace("%", "%%"))
+    command.downgrade(config, "base")
+    command.upgrade(config, "head")
+    return _require_env("TEST_DATABASE_URL")
+
+
+@pytest.fixture(scope="session")
+def db_engine(migrated_database_url: str) -> Iterator[Engine]:
+    engine = build_engine(migrated_database_url)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture
+def db_session(db_engine: Engine) -> Iterator[Session]:
+    with db_engine.connect() as connection:
+        outer_transaction = connection.begin()
+        session = Session(
+            bind=connection,
+            join_transaction_mode="create_savepoint",
+            autoflush=False,
+            expire_on_commit=False,
+        )
+        try:
+            yield session
+        finally:
+            session.close()
+            outer_transaction.rollback()
+
+
+@pytest.fixture
+def db_client(app: FastAPI, db_session: Session) -> Iterator[TestClient]:
+    app.dependency_overrides[get_session] = lambda: db_session
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+# --- Probe routes: exercise middleware and error handling without business endpoints ---
+
+PROBE_LOGGER = "tests.probe"
+
+DOMAIN_ERRORS: dict[str, DomainError] = {
+    "not_found": NotFoundError("PRODUCT_NOT_FOUND", "Product not found."),
+    "conflict": ConflictError(
+        "INSUFFICIENT_STOCK",
+        "Not enough available stock for 1 material.",
+        [{"material_code": "BOLT-M8", "required": "840", "available": "500", "shortage": "340"}],
+    ),
+    "validation": BusinessValidationError(
+        "INVALID_QUANTITY", "Quantity must be a positive integer."
+    ),
+    "concurrency": ConcurrencyConflictError("CONCURRENCY_CONFLICT", "Please retry the request."),
+}
+
+
+class ProbeBody(BaseModel):
+    password: str
+    quantity: int = Field(gt=0)
+
+
+@pytest.fixture
+def probe_client(app: FastAPI) -> Iterator[TestClient]:
+    @app.get("/_probe/ok")
+    def probe_ok() -> dict[str, str]:
+        logging.getLogger(PROBE_LOGGER).info("probe handled")
+        return {"status": "ok"}
+
+    @app.get("/_probe/domain/{kind}")
+    def probe_domain_error(kind: str) -> None:
+        raise DOMAIN_ERRORS[kind]
+
+    @app.get("/_probe/crash")
+    def probe_crash() -> None:
+        raise RuntimeError("internal detail: SELECT password_hash FROM users")
+
+    @app.post("/_probe/validate")
+    def probe_validate(body: ProbeBody) -> dict[str, str]:
+        return {"status": "ok"}
+
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        yield test_client

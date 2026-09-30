@@ -1,0 +1,60 @@
+# Manuflow — Manufacturing Production & Inventory Backend
+
+This project is a student/personal simulation of an internal manufacturing management system. It models common workflows such as BOM management, material planning, inventory reservation, production planning, and workshop progress tracking. It is not a production ERP, and the author does not claim professional manufacturing experience.
+
+> Status: **Phase 1 — foundation** (Docker Compose, settings, DB session, Alembic, health check, error format, request ID, CI).
+> The full specification is in [`docs/requirements.md`](docs/requirements.md).
+
+## Quick start
+
+Requirements: Docker Desktop (Compose v2).
+
+```bash
+cp .env.example .env          # placeholder values, fine for local development
+docker compose up -d --build  # MySQL 8.0 + API; migrations run on API start
+curl http://localhost:8000/health
+# {"status":"ok","database":"ok"}
+```
+
+OpenAPI docs: <http://localhost:8000/docs>. MySQL is exposed on host port `3307`.
+
+## Tests and quality checks
+
+```bash
+docker compose exec api pytest -q                    # unit + API + integration (real MySQL)
+docker compose exec api ruff check .
+docker compose exec api ruff format --check .
+docker compose exec api mypy
+```
+
+Integration tests run against a separate `manuflow_test` schema that Alembic rebuilds at
+the start of every run; each test is rolled back afterwards. SQLite is not used, because
+row locking and `CHECK` constraints must behave exactly like production (B2, B15).
+
+CI (GitHub Actions) runs lint, type checks, `pip-audit` and the full test suite against a
+MySQL 8.0 service container on every pull request.
+
+## Project layout
+
+```
+backend/
+  app/
+    api/          thin routes, error mapping, dependencies
+    core/         settings, request ID, logging, clock
+    db/           declarative base, engine, session factory
+    domain/       pure business logic, no I/O
+    models/       SQLAlchemy models
+    repositories/ queries and row locks, never commit
+    schemas/      Pydantic request/response models
+    services/     use cases; each owns one DB transaction
+  alembic/        migrations (run with a separate DDL user)
+  tests/          unit/ api/ integration/
+docker/mysql/init/  creates databases and least-privilege DB users
+docs/               requirements, decisions, AI usage log
+```
+
+## AI-assisted development
+
+Built with Claude Code under the rules in [`CLAUDE.md`](CLAUDE.md): one branch and one
+pull request per unit of work, tests for every business rule, CI on every PR, and a log
+of AI mistakes caught in review in [`docs/ai-usage.md`](docs/ai-usage.md).
