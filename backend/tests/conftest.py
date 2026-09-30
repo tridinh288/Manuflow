@@ -11,6 +11,7 @@ import logging
 import os
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,7 @@ from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_clock, get_session
@@ -36,7 +37,9 @@ from app.domain.errors import (
     NotFoundError,
 )
 from app.main import create_app
+from app.models.master_data import Inventory, Material, Product
 from app.models.user import User
+from app.models.warehouse import DEFAULT_WAREHOUSE_CODE, Warehouse
 from app.models.work_center import WorkCenter
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -164,7 +167,57 @@ def insert(session: Session, *rows: object) -> None:
         session.add_all(rows)
 
 
+ProductFactory = Callable[..., Product]
+MaterialFactory = Callable[..., Material]
 WorkCenterFactory = Callable[..., WorkCenter]
+
+
+@pytest.fixture
+def product_factory(db_session: Session) -> ProductFactory:
+    sequence = itertools.count(1)
+
+    def create(code: str | None = None, *, name: str = "Product", active: bool = True) -> Product:
+        product = Product(
+            product_code=code or f"PRD-T{next(sequence):03d}", name=name, unit="pcs", active=active
+        )
+        insert(db_session, product)
+        return product
+
+    return create
+
+
+@pytest.fixture
+def material_factory(db_session: Session) -> MaterialFactory:
+    """Material plus its zero balance row, as the service creates them (BR-INV-01)."""
+    sequence = itertools.count(1)
+
+    def create(
+        code: str | None = None,
+        *,
+        unit: str = "kg",
+        decimal_places: int = 3,
+        minimum_stock: Decimal = Decimal(0),
+        active: bool = True,
+    ) -> Material:
+        material = Material(
+            material_code=code or f"MAT-T{next(sequence):03d}",
+            name="Material",
+            unit=unit,
+            decimal_places=decimal_places,
+            minimum_stock=minimum_stock,
+            active=active,
+        )
+        insert(db_session, material)
+        with db_session.begin():
+            warehouse_id = db_session.scalars(
+                select(Warehouse.id).where(Warehouse.code == DEFAULT_WAREHOUSE_CODE)
+            ).one()
+            db_session.add(Inventory(warehouse_id=warehouse_id, material_id=material.id))
+        return material
+
+    return create
+
+
 UserFactory = Callable[..., User]
 
 

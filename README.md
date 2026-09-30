@@ -2,11 +2,10 @@
 
 This project is a student/personal simulation of an internal manufacturing management system. It models common workflows such as BOM management, material planning, inventory reservation, production planning, and workshop progress tracking. It is not a production ERP, and the author does not claim professional manufacturing experience.
 
-> Status: **Phase 2 — authentication and audit** (in progress). Done so far: Phase 1 foundation;
-> login with JWT access tokens, account lockout, `/auth/me`, the permission matrix,
-> server-side permission checks on every route, user administration, an append-only
-> audit log and idempotent mutations (`Idempotency-Key`).
-> The full specification is in [`docs/requirements.md`](docs/requirements.md).
+> Status: **Phase 3 — master data and BOM** (in progress). Done: Phase 1 foundation; Phase 2
+> authentication (JWT, lockout, permission matrix, user admin), append-only audit log and
+> idempotent mutations; products, materials (with their zero inventory balance) and work
+> centers with immutable codes and deactivate-only deletes.
 
 ## Quick start
 

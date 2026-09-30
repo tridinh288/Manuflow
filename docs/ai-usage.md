@@ -48,6 +48,14 @@ Mỗi mục ghi: AI đã viết gì, test hoặc review nào phát hiện, sửa
 - **Sửa:** dùng actor không có dòng user (`user_id=None`), để test chỉ còn đo khóa ADMIN. Phá lại: bỏ `FOR UPDATE` → 2 test fail; khôi phục → pass. Test race cũng được siết lại, từ chấp nhận cả `["OK", "OK"]` thành bắt buộc đúng một `LAST_ADMIN`.
 - **PR:** phase-2/last-admin-guard.
 
+### 7. Lại một test đồng thời pass nhờ khóa khóa ngoại (Phase 3)
+
+- **AI viết:** test cho khóa work center khi gán WORKER. Một transaction giữ khóa dòng work center, rồi test khẳng định request tạo WORKER "phải chờ". Request đó luôn phải chờ, vì INSERT user có FK `work_center_id` lấy shared lock trên dòng cha, **kể cả khi service không khóa**. Đây là cùng một cái bẫy như mục 6: AI đã ghi lại bài học nhưng vẫn lặp lại.
+- **Phát hiện bởi:** cố tình phá code, đổi `get_for_update` thành `get`: test vẫn pass.
+- **Sửa:** test tái hiện đúng thứ tự gây hại. Transaction giữ khóa đặt `active = 0` nhưng chưa commit, và request gán phải nhận `WORK_CENTER_INACTIVE`. Không có khóa, request đọc snapshot cũ (còn active) và gán thành công, nên test fail. Phá lại: fail; khôi phục: pass.
+- **Bài học áp dụng từ giờ:** mọi test đồng thời phải được kiểm chứng bằng cách cố tình phá code, và phải khẳng định **kết quả nghiệp vụ** (mã lỗi, số dòng), không chỉ "có phải chờ hay không".
+- **PR:** phase-3/master-data.
+
 ## Rà soát đặc tả
 
 Ở bước rà soát (B20), AI tìm ra 10 điểm mâu thuẫn hoặc còn thiếu trong `docs/requirements.md`. Các điểm này được ghi lại cùng quyết định đã duyệt trong [`decisions.md`](decisions.md).

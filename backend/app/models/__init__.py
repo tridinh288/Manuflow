@@ -2,8 +2,18 @@
 
 from app.models.audit_log import AuditLog
 from app.models.idempotency_key import IdempotencyKey
+from app.models.master_data import Inventory, Material, Product
 from app.models.user import User
 from app.models.warehouse import Warehouse
 from app.models.work_center import WorkCenter
 
-__all__ = ["AuditLog", "IdempotencyKey", "User", "Warehouse", "WorkCenter"]
+__all__ = [
+    "AuditLog",
+    "IdempotencyKey",
+    "Inventory",
+    "Material",
+    "Product",
+    "User",
+    "Warehouse",
+    "WorkCenter",
+]

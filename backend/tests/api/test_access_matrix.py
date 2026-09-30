@@ -17,7 +17,6 @@ from fastapi.testclient import TestClient
 
 from app.api.access import ACCESS_RULE_ATTRIBUTE, AccessRule, require
 from app.core.permissions import Permission, Role, has_permission
-from app.models.user import User
 
 PUBLIC = AccessRule(public=True)
 AUTHENTICATED = AccessRule()
@@ -34,6 +33,21 @@ ENDPOINT_ACCESS: dict[tuple[str, str], AccessRule] = {
     ("GET", "/api/v1/users"): perm(Permission.USERS_MANAGE),
     ("POST", "/api/v1/users"): perm(Permission.USERS_MANAGE),
     ("PATCH", "/api/v1/users/{user_id}"): perm(Permission.USERS_MANAGE),
+    ("GET", "/api/v1/products"): perm(Permission.MASTER_READ),
+    ("GET", "/api/v1/products/{product_id}"): perm(Permission.MASTER_READ),
+    ("POST", "/api/v1/products"): perm(Permission.MASTER_WRITE),
+    ("PUT", "/api/v1/products/{product_id}"): perm(Permission.MASTER_WRITE),
+    ("DELETE", "/api/v1/products/{product_id}"): perm(Permission.MASTER_WRITE),
+    ("GET", "/api/v1/materials"): perm(Permission.MASTER_READ),
+    ("GET", "/api/v1/materials/{material_id}"): perm(Permission.MASTER_READ),
+    ("POST", "/api/v1/materials"): perm(Permission.MASTER_WRITE),
+    ("PUT", "/api/v1/materials/{material_id}"): perm(Permission.MASTER_WRITE),
+    ("DELETE", "/api/v1/materials/{material_id}"): perm(Permission.MASTER_WRITE),
+    ("GET", "/api/v1/work-centers"): perm(Permission.MASTER_READ),
+    ("GET", "/api/v1/work-centers/{work_center_id}"): perm(Permission.MASTER_READ),
+    ("POST", "/api/v1/work-centers"): perm(Permission.MASTER_WRITE),
+    ("PUT", "/api/v1/work-centers/{work_center_id}"): perm(Permission.MASTER_WRITE),
+    ("DELETE", "/api/v1/work-centers/{work_center_id}"): perm(Permission.MASTER_WRITE),
 }
 
 
@@ -114,6 +128,34 @@ PROTECTED_CALLS: list[Call] = [
         },
     ),
     Call("PATCH", "/api/v1/users/{user_id}", json=lambda n: {"full_name": f"Renamed {n}"}),
+    Call("GET", "/api/v1/products"),
+    Call("GET", "/api/v1/products/{product_id}"),
+    Call("POST", "/api/v1/products", json=lambda n: {"product_code": f"NEW-P{n}", "name": "P"}),
+    Call("PUT", "/api/v1/products/{product_id}", json=lambda n: {"name": f"Renamed {n}"}),
+    Call("DELETE", "/api/v1/products/{product_id}"),
+    Call("GET", "/api/v1/materials"),
+    Call("GET", "/api/v1/materials/{material_id}"),
+    Call(
+        "POST",
+        "/api/v1/materials",
+        json=lambda n: {
+            "material_code": f"NEW-M{n}",
+            "name": "M",
+            "unit": "kg",
+            "decimal_places": 3,
+        },
+    ),
+    Call(
+        "PUT",
+        "/api/v1/materials/{material_id}",
+        json=lambda n: {"name": f"Renamed {n}", "minimum_stock": "1.5"},
+    ),
+    Call("DELETE", "/api/v1/materials/{material_id}"),
+    Call("GET", "/api/v1/work-centers"),
+    Call("GET", "/api/v1/work-centers/{work_center_id}"),
+    Call("POST", "/api/v1/work-centers", json=lambda n: {"code": f"NEW-W{n}", "name": "W"}),
+    Call("PUT", "/api/v1/work-centers/{work_center_id}", json=lambda n: {"name": f"W {n}"}),
+    Call("DELETE", "/api/v1/work-centers/{work_center_id}"),
 ]
 
 
@@ -123,8 +165,21 @@ def test_b4_protected_call_list_covers_every_protected_route() -> None:
     assert covered == protected
 
 
-def _send(client: TestClient, call: Call, target: User, headers: dict[str, str], n: int) -> int:
-    path = call.path.format(user_id=target.id)
+@pytest.fixture
+def targets(user_factory, product_factory, material_factory, work_center_factory) -> dict[str, int]:
+    """One existing, unused row of each kind for the path parameters."""
+    return {
+        "user_id": user_factory(role=Role.WAREHOUSE).id,
+        "product_id": product_factory().id,
+        "material_id": material_factory().id,
+        "work_center_id": work_center_factory().id,
+    }
+
+
+def _send(
+    client: TestClient, call: Call, targets: dict[str, int], headers: dict[str, str], n: int
+) -> int:
+    path = call.path.format(**targets)
     body = call.json(n) if call.json else None
     return client.request(call.method, path, json=body, headers=headers).status_code
 
@@ -132,11 +187,10 @@ def _send(client: TestClient, call: Call, target: User, headers: dict[str, str],
 @pytest.mark.parametrize("role", list(Role))
 @pytest.mark.parametrize("call", PROTECTED_CALLS, ids=lambda c: f"{c.method} {c.path}")
 def test_b4_role_gets_2xx_or_403_per_permission_matrix(
-    db_client: TestClient, login_as, user_factory, role: Role, call: Call
+    db_client: TestClient, login_as, targets: dict[str, int], role: Role, call: Call
 ) -> None:
     headers = login_as(role)
-    target = user_factory(role=Role.WAREHOUSE)
-    status = _send(db_client, call, target, headers, n=1)
+    status = _send(db_client, call, targets, headers, n=1)
 
     rule = ENDPOINT_ACCESS[(call.method, call.path)]
     allowed = rule.permission is None or has_permission(role, rule.permission)
@@ -148,7 +202,6 @@ def test_b4_role_gets_2xx_or_403_per_permission_matrix(
 
 @pytest.mark.parametrize("call", PROTECTED_CALLS, ids=lambda c: f"{c.method} {c.path}")
 def test_br_auth_02_protected_route_without_token_is_401(
-    db_client: TestClient, user_factory, call: Call
+    db_client: TestClient, targets: dict[str, int], call: Call
 ) -> None:
-    target = user_factory(role=Role.WAREHOUSE)
-    assert _send(db_client, call, target, headers={}, n=2) == 401
+    assert _send(db_client, call, targets, headers={}, n=2) == 401
