@@ -11,6 +11,7 @@ from app.core.clock import Clock
 from app.domain.errors import AuthenticationError
 from app.services.auth_service import AuthenticatedUser, AuthService
 from app.services.context import RequestContext
+from app.services.user_service import UserService
 
 _MAX_IP_LENGTH = 45
 
@@ -57,4 +58,7 @@ def get_current_user(
     return auth_service.authenticate(credentials.credentials)
 
 
-CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
+def get_user_service(
+    request: Request, session: Annotated[Session, Depends(get_session)]
+) -> UserService:
+    return UserService(session, request.app.state.password_hasher)

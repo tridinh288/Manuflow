@@ -13,6 +13,13 @@ Mỗi mục ghi: AI đã viết gì, test hoặc review nào phát hiện, sửa
 - **Sửa:** bật `hide_input_in_errors=True` trong `model_config`. Test giữ nguyên, không bị nới lỏng.
 - **PR:** phase-1/foundation.
 
+### 2. Test quét quyền có thể pass trên danh sách route rỗng (Phase 2)
+
+- **AI viết:** test BR-AUTH-02 duyệt `app.routes` và lọc các `APIRoute`, rồi khẳng định mỗi route khai báo đúng một quy tắc truy cập. Từ FastAPI 0.142, router được include nằm lồng trong `_IncludedRouter`, nên `app.routes` không còn chứa `APIRoute` nào. Nếu test chỉ khẳng định "không route nào vi phạm", nó sẽ **pass trên danh sách rỗng**: kiểu test khẳng định một hành vi sai mà `CLAUDE.md` đã cảnh báo.
+- **Phát hiện bởi:** test thứ hai do AI viết cùng lúc, so khớp danh sách route quét được với bảng endpoint của đặc tả (B13). Test này fail với `{} != {...6 endpoint...}`.
+- **Sửa:** dùng API public `fastapi.routing.iter_route_contexts` (trả về đường dẫn đầy đủ và dependency có tính cả cấp router), và thêm khẳng định phải quét thấy ít nhất số endpoint trong bảng đặc tả. Kiểm chứng bằng cách cố tình phá: đổi quyền của `/users` → 10 test fail; bỏ kiểm tra quyền trong `require()` → 9 test fail; bỏ nhãn công khai của `/login` → 2 test fail.
+- **PR:** phase-2/permissions-users.
+
 ## Rà soát đặc tả
 
 Ở bước rà soát (B20), AI tìm ra 10 điểm mâu thuẫn hoặc còn thiếu trong `docs/requirements.md`. Các điểm này được ghi lại cùng quyết định đã duyệt trong [`decisions.md`](decisions.md).

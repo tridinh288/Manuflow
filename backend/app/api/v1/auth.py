@@ -2,15 +2,16 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.api.deps import CurrentUser, get_auth_service, get_request_context
+from app.api.access import allow_public, require_authenticated
+from app.api.deps import get_auth_service, get_request_context
 from app.schemas.auth import LoginRequest, MeResponse, TokenResponse
-from app.services.auth_service import AuthService
+from app.services.auth_service import AuthenticatedUser, AuthService
 from app.services.context import RequestContext
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/login")
+@router.post("/login", dependencies=[Depends(allow_public)])
 def login(
     body: LoginRequest,
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
@@ -21,7 +22,7 @@ def login(
 
 
 @router.get("/me")
-def me(user: CurrentUser) -> MeResponse:
+def me(user: Annotated[AuthenticatedUser, Depends(require_authenticated)]) -> MeResponse:
     return MeResponse(
         id=user.id,
         username=user.username,

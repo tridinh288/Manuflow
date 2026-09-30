@@ -3,8 +3,9 @@
 This project is a student/personal simulation of an internal manufacturing management system. It models common workflows such as BOM management, material planning, inventory reservation, production planning, and workshop progress tracking. It is not a production ERP, and the author does not claim professional manufacturing experience.
 
 > Status: **Phase 2 — authentication and audit** (in progress). Done so far: Phase 1 foundation;
-> login with JWT access tokens, account lockout, `/auth/me`, the permission matrix and an
-> append-only audit log.
+> login with JWT access tokens, account lockout, `/auth/me`, the permission matrix,
+> server-side permission checks on every route, user administration and an append-only
+> audit log.
 > The full specification is in [`docs/requirements.md`](docs/requirements.md).
 
 ## Quick start
@@ -19,6 +20,16 @@ curl http://localhost:8000/health
 ```
 
 OpenAPI docs: <http://localhost:8000/docs>. MySQL is exposed on host port `3307`.
+
+Create the first admin (the API cannot create users without one):
+
+```bash
+docker compose exec -e ADMIN_PASSWORD='choose-a-long-password' api   python -m app.cli create-user --username admin --full-name "System Admin"   --role ADMIN --password-env ADMIN_PASSWORD
+```
+
+The admin then manages users with `GET/POST /api/v1/users` and `PATCH /api/v1/users/{id}`.
+Every route declares exactly one access rule (public, authenticated, or one permission
+from the B4 matrix); a test walks the router and fails on any route that does not.
 
 Authentication: `POST /api/v1/auth/login` with `{"username", "password"}` returns a 30-minute
 bearer token; `GET /api/v1/auth/me` returns the caller, role and permissions. Five failed

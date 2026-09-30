@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
+from app.api.access import allow_public
 from app.api.deps import get_session
 from app.schemas.health import ComponentStatus, HealthResponse
 from app.services.health_service import HealthService
@@ -12,7 +13,11 @@ from app.services.health_service import HealthService
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health", responses={503: {"model": HealthResponse}})
+@router.get(
+    "/health",
+    responses={503: {"model": HealthResponse}},
+    dependencies=[Depends(allow_public)],
+)
 def health(session: Annotated[Session, Depends(get_session)], response: Response) -> HealthResponse:
     database_ok = HealthService(session).database_is_available()
     status: ComponentStatus = "ok" if database_ok else "unavailable"

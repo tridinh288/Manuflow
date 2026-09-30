@@ -14,6 +14,11 @@ SENSITIVE_KEY_PARTS = ("password", "token", "authorization", "secret", "api_key"
 class AuditAction(StrEnum):
     LOGIN_SUCCESS = "LOGIN_SUCCESS"
     LOGIN_FAILED = "LOGIN_FAILED"
+    USER_CREATED = "USER_CREATED"
+    USER_UPDATED = "USER_UPDATED"
+    USER_ROLE_CHANGED = "USER_ROLE_CHANGED"
+    USER_DEACTIVATED = "USER_DEACTIVATED"
+    USER_REACTIVATED = "USER_REACTIVATED"
 
 
 class AuditEntity(StrEnum):

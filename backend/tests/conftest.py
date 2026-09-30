@@ -243,3 +243,21 @@ def probe_client(app: FastAPI) -> Iterator[TestClient]:
 
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
+
+
+LoginAs = Callable[..., dict[str, str]]
+
+
+@pytest.fixture
+def login_as(db_client: TestClient, user_factory: UserFactory) -> LoginAs:
+    """Create a user with the given role, log in, and return the Authorization header."""
+
+    def login(role: Role = Role.ADMIN, **user_fields: object) -> dict[str, str]:
+        user = user_factory(role=role, **user_fields)
+        response = db_client.post(
+            "/api/v1/auth/login", json={"username": user.username, "password": DEFAULT_PASSWORD}
+        )
+        assert response.status_code == 200, response.text
+        return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+    return login
