@@ -83,6 +83,41 @@ class InventoryService:
             )
         return MovementResult(line=line, material=material, balance=movement.after)
 
+    def adjust(
+        self,
+        material_id: int,
+        delta: Decimal,
+        reason: str,
+        actor: Actor,
+        context: RequestContext,
+    ) -> MovementResult:
+        """ADJUSTMENT: signed correction with a mandatory reason. Allowed for inactive
+        materials so remaining stock can be counted or written off (C-15)."""
+        with transaction(self._session):
+            material = self._material(material_id)
+            row = self._inventory.lock_balance(material.id)
+            movement = inventory.adjust(_balance(row), delta, material.decimal_places)
+            line = self._apply(
+                row, material, movement, TransactionType.ADJUSTMENT, actor, context, reason=reason
+            )
+            places = material.decimal_places
+            self._audit.record(
+                action=AuditAction.INVENTORY_ADJUSTMENT,
+                entity_type=AuditEntity.INVENTORY_TRANSACTION,
+                entity_id=line.id,
+                actor=actor,
+                context=context,
+                old_value={"on_hand": format_quantity(_on_hand_before(movement), places)},
+                new_value={
+                    "material_code": material.material_code,
+                    "quantity_delta": format_quantity(delta, places),
+                    "unit": material.unit,
+                    "on_hand": format_quantity(movement.after.on_hand, places),
+                },
+                reason=reason,
+            )
+        return MovementResult(line=line, material=material, balance=movement.after)
+
     def _material(self, material_id: int) -> Material:
         material = self._inventory.get_material_for_share(material_id)
         if material is None:
@@ -128,3 +163,7 @@ class InventoryService:
 
 def _balance(row: Inventory) -> Balance:
     return Balance(on_hand=row.on_hand_quantity, reserved=row.reserved_quantity)
+
+
+def _on_hand_before(movement: Movement) -> Decimal:
+    return movement.after.on_hand - movement.on_hand_delta

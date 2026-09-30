@@ -59,6 +59,7 @@ ENDPOINT_ACCESS: dict[tuple[str, str], AccessRule] = {
     ("PUT", "/api/v1/routings/{routing_id}/steps"): perm(Permission.ROUTING_WRITE),
     ("POST", "/api/v1/routings/{routing_id}/activate"): perm(Permission.ROUTING_WRITE),
     ("POST", "/api/v1/inventory/receipts"): perm(Permission.INVENTORY_RECEIVE),
+    ("POST", "/api/v1/inventory/adjustments"): perm(Permission.INVENTORY_ADJUST),
 }
 
 
@@ -195,6 +196,12 @@ PROTECTED_CALLS: list[Call] = [
         "POST",
         "/api/v1/inventory/receipts",
         json=lambda n: {"material_id": 0, "quantity": f"{n}"},
+        idempotency_key=True,
+    ),
+    Call(
+        "POST",
+        "/api/v1/inventory/adjustments",
+        json=lambda n: {"material_id": 0, "quantity_delta": f"{n}", "reason": "Recount"},
         idempotency_key=True,
     ),
 ]

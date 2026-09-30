@@ -7,7 +7,12 @@ from app.api.access import require
 from app.api.deps import get_inventory_service, get_request_context
 from app.api.idempotency import RequiredIdempotency
 from app.core.permissions import Permission
-from app.schemas.inventory import MovementResponse, ReceiptRequest, to_decimal
+from app.schemas.inventory import (
+    AdjustmentRequest,
+    MovementResponse,
+    ReceiptRequest,
+    to_decimal,
+)
 from app.services.auth_service import AuthenticatedUser
 from app.services.context import RequestContext
 from app.services.inventory_service import InventoryService
@@ -15,6 +20,7 @@ from app.services.inventory_service import InventoryService
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
 Receiver = Annotated[AuthenticatedUser, Depends(require(Permission.INVENTORY_RECEIVE))]
+Adjuster = Annotated[AuthenticatedUser, Depends(require(Permission.INVENTORY_ADJUST))]
 Service = Annotated[InventoryService, Depends(get_inventory_service)]
 Context = Annotated[RequestContext, Depends(get_request_context)]
 
@@ -35,6 +41,25 @@ def receive_stock(
         operation=lambda: service.receive(
             body.material_id, quantity, body.reference, user.actor, context
         ),
+        to_response=MovementResponse.of,
+        status_code=status.HTTP_201_CREATED,
+    )
+
+
+@router.post("/adjustments", status_code=status.HTTP_201_CREATED, response_model=MovementResponse)
+def adjust_stock(
+    body: AdjustmentRequest,
+    user: Adjuster,
+    service: Service,
+    context: Context,
+    idempotent: RequiredIdempotency,
+) -> JSONResponse:
+    """ADJUSTMENT (B6): signed correction with a reason; never below reserved (D-20)."""
+    delta = to_decimal(body.quantity_delta)
+    return idempotent.respond(
+        user=user,
+        payload=body,
+        operation=lambda: service.adjust(body.material_id, delta, body.reason, user.actor, context),
         to_response=MovementResponse.of,
         status_code=status.HTTP_201_CREATED,
     )
