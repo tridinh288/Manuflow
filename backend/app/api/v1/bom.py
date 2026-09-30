@@ -8,7 +8,14 @@ from app.api.deps import get_bom_service, get_request_context
 from app.api.idempotency import OptionalIdempotency
 from app.core.permissions import Permission
 from app.domain.bom import BomLine
-from app.schemas.bom import BomItemsRequest, BomResponse, to_decimal
+from app.schemas.bom import (
+    BomItemsRequest,
+    BomResponse,
+    ExplodeRequest,
+    ExplodeResponse,
+    MaterialRequirementResponse,
+    to_decimal,
+)
 from app.schemas.common import Page
 from app.services.auth_service import AuthenticatedUser
 from app.services.bom_service import BomService
@@ -87,4 +94,19 @@ def activate_bom(
         payload=None,
         operation=lambda: service.activate(bom_id, user.actor, context),
         to_response=BomResponse.of,
+    )
+
+
+@router.post("/products/{product_id}/bom/explode")
+def explode_bom(
+    product_id: int, body: ExplodeRequest, _: Reader, service: Service
+) -> ExplodeResponse:
+    """BR-BOM-05: material requirements for a quantity. Calculation only; nothing is saved."""
+    requirements = service.calculate_material_requirements(
+        product_id, body.quantity, body.bom_header_id
+    )
+    return ExplodeResponse(
+        product_id=product_id,
+        quantity=body.quantity,
+        items=[MaterialRequirementResponse.of(r) for r in requirements],
     )

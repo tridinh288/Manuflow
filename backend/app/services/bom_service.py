@@ -14,6 +14,12 @@ from app.db.transaction import transaction
 from app.domain.audit import AuditAction, AuditEntity
 from app.domain.bom import BomLine, VersionStatus, ensure_editable, validate_lines
 from app.domain.errors import BusinessValidationError, ConflictError, NotFoundError
+from app.domain.explode import (
+    ExplosionLine,
+    MaterialRequirement,
+    explode,
+    validate_order_quantity,
+)
 from app.models.bom import BomHeader, BomItem
 from app.models.master_data import Material, Product
 from app.repositories.bom_repository import BomRepository
@@ -55,6 +61,53 @@ class BomService:
             material_ids = sorted({i.material_id for h in headers for i in h.items})
             materials = self._boms.materials_by_id(material_ids)
             return [BomView(header, materials) for header in headers]
+
+    def calculate_material_requirements(
+        self, product_id: int, quantity: int, bom_header_id: int | None = None
+    ) -> list[MaterialRequirement]:
+        """BR-BOM-05: explode the product's ACTIVE BOM (or the given version) for
+        ``quantity`` units. Read-only: nothing is written or locked."""
+        validate_order_quantity(quantity)
+        with transaction(self._session):
+            product = self._products.get(product_id)
+            if product is None:
+                raise _product_not_found()
+            if not product.active:
+                raise ConflictError("PRODUCT_INACTIVE", "The product is inactive.")
+            header = self._explosion_header(product.id, bom_header_id)
+            materials = self._boms.materials_by_id([item.material_id for item in header.items])
+            inactive = sorted(
+                materials[item.material_id].material_code
+                for item in header.items
+                if not materials[item.material_id].active
+            )
+            if inactive:
+                raise _materials_inactive(inactive)
+            return explode(
+                (
+                    ExplosionLine(
+                        material_id=item.material_id,
+                        material_code=materials[item.material_id].material_code,
+                        unit=materials[item.material_id].unit,
+                        decimal_places=materials[item.material_id].decimal_places,
+                        qty_per_unit=item.qty_per_unit,
+                        scrap_rate=item.scrap_rate,
+                    )
+                    for item in header.items
+                ),
+                quantity,
+            )
+
+    def _explosion_header(self, product_id: int, bom_header_id: int | None) -> BomHeader:
+        if bom_header_id is None:
+            header = self._boms.active_for_product(product_id)
+            if header is None:
+                raise ConflictError("NO_ACTIVE_BOM", "The product has no ACTIVE BOM.")
+            return header
+        header = self._boms.get(bom_header_id)
+        if header is None or header.product_id != product_id:
+            raise _bom_not_found()
+        return header
 
     # --- Commands ------------------------------------------------------------------------
 
