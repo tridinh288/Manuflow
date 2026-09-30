@@ -15,3 +15,4 @@ Mã `C-xx` được dùng để không trùng với `D-xx`. Khi chủ dự án c
 | C-08 | D-22 | Không có job dọn key hết hạn | Key quá 24h coi như không tồn tại và bị xóa khi tra; thêm lệnh CLI dọn thủ công | Phase 2 |
 | C-09 | B9 | `time_ratio` chia cho 0 khi `due_date = started_at`; dòng `NOT_STARTED_DUE_SOON` cho MATERIAL_SHORTAGE không bao giờ khớp | Mẫu số ≤ 0 thì `time_ratio = 1`; giữ nguyên dòng dư thừa, ghi chú lại | Phase 6 |
 | C-10 | BR-OP-01, BR-OP-03 | Không điều chỉnh được công đoạn đã COMPLETED | Giữ nguyên; ghi vào README như một giới hạn | Phase 6 |
+| C-11 | Part A (Quy tắc cứng), skill `git-pr-workflow` | Chủ dự án muốn AI merge PR thay mình | AI được merge **chỉ khi chủ dự án yêu cầu rõ ràng cho đúng PR đó** và CI xanh, bằng `--merge --delete-branch`; cấm `--admin`/`--auto`/`--squash`/`--rebase`. `CLAUDE.md` và skill đã cập nhật (2026-09-30); phần A của `requirements.md` cần được chủ dự án cập nhật ở bản gốc | Ngay |
