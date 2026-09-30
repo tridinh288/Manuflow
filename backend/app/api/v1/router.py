@@ -2,8 +2,8 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import auth, materials, products, users, work_centers
+from app.api.v1 import auth, bom, materials, products, users, work_centers
 
 api_router = APIRouter()
-for module in (auth, users, products, materials, work_centers):
+for module in (auth, users, products, materials, work_centers, bom):
     api_router.include_router(module.router)

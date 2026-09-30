@@ -126,3 +126,59 @@ def test_br_inv_02_available_can_never_go_negative_at_db_level(
             ),
             {"on_hand": on_hand, "reserved": reserved, "material_id": material.id},
         )
+
+
+# --- Tests 3 and 4 of B15: BOM integrity enforced by the database -----------------------
+
+
+def test_br_bom_02_duplicate_material_in_a_version_rejected_by_db(
+    db_session: Session, product_factory, material_factory, bom_factory
+) -> None:
+    bolt = material_factory("BOLT-M8", unit="pcs", decimal_places=0)
+    header = bom_factory(product_factory(), [(bolt, "8", "0")])
+    with pytest.raises(DBAPIError, match="Duplicate entry"), db_session.begin():
+        db_session.execute(
+            text(
+                "INSERT INTO bom_items (bom_header_id, material_id, qty_per_unit) "
+                "VALUES (:header, :material, 2)"
+            ),
+            {"header": header.id, "material": bolt.id},
+        )
+
+
+def test_br_bom_04_db_allows_only_one_active_version_per_product(
+    db_session: Session, product_factory, material_factory, bom_factory
+) -> None:
+    product = product_factory()
+    steel = material_factory()
+    bom_factory(product, [(steel, "2", "0")], version=1, status="ACTIVE")
+    second = bom_factory(product, [(steel, "3", "0")], version=2, status="DRAFT")
+    with pytest.raises(DBAPIError, match="active_flag"), db_session.begin():
+        db_session.execute(
+            text("UPDATE bom_headers SET status = 'ACTIVE' WHERE id = :id"), {"id": second.id}
+        )
+
+
+@pytest.mark.parametrize(
+    ("qty", "scrap", "constraint"),
+    [("0", "0", "qty_per_unit_positive"), ("1", "1", "scrap_rate_range")],
+)
+def test_br_bom_01_line_ranges_enforced_by_db(
+    db_session: Session,
+    product_factory,
+    material_factory,
+    bom_factory,
+    qty: str,
+    scrap: str,
+    constraint: str,
+) -> None:
+    header = bom_factory(product_factory(), [])
+    material = material_factory()
+    with pytest.raises(DBAPIError, match=constraint), db_session.begin():
+        db_session.execute(
+            text(
+                "INSERT INTO bom_items (bom_header_id, material_id, qty_per_unit, scrap_rate) "
+                "VALUES (:header, :material, :qty, :scrap)"
+            ),
+            {"header": header.id, "material": material.id, "qty": qty, "scrap": scrap},
+        )

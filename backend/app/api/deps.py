@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.clock import Clock
 from app.domain.errors import AuthenticationError
 from app.services.auth_service import AuthenticatedUser, AuthService
+from app.services.bom_service import BomService
 from app.services.context import RequestContext
 from app.services.master_data_service import MaterialService, ProductService, WorkCenterService
 from app.services.user_service import UserService
@@ -77,3 +78,10 @@ def get_work_center_service(
     session: Annotated[Session, Depends(get_session)],
 ) -> WorkCenterService:
     return WorkCenterService(session)
+
+
+def get_bom_service(
+    session: Annotated[Session, Depends(get_session)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> BomService:
+    return BomService(session, clock)

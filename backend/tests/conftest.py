@@ -37,6 +37,7 @@ from app.domain.errors import (
     NotFoundError,
 )
 from app.main import create_app
+from app.models.bom import BomHeader, BomItem
 from app.models.master_data import Inventory, Material, Product
 from app.models.user import User
 from app.models.warehouse import DEFAULT_WAREHOUSE_CODE, Warehouse
@@ -170,6 +171,33 @@ def insert(session: Session, *rows: object) -> None:
 ProductFactory = Callable[..., Product]
 MaterialFactory = Callable[..., Material]
 WorkCenterFactory = Callable[..., WorkCenter]
+BomFactory = Callable[..., BomHeader]
+
+
+@pytest.fixture
+def bom_factory(db_session: Session) -> BomFactory:
+    """A BOM version with lines ``(material, qty_per_unit, scrap_rate)``."""
+
+    def create(
+        product: Product,
+        lines: list[tuple[Material, str, str]],
+        *,
+        version: int = 1,
+        status: str = "DRAFT",
+    ) -> BomHeader:
+        header = BomHeader(
+            product_id=product.id,
+            version=version,
+            status=status,
+            items=[
+                BomItem(material_id=m.id, qty_per_unit=Decimal(q), scrap_rate=Decimal(s))
+                for m, q, s in lines
+            ],
+        )
+        insert(db_session, header)
+        return header
+
+    return create
 
 
 @pytest.fixture
