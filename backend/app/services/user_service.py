@@ -13,6 +13,7 @@ from app.db.transaction import transaction
 from app.domain.audit import AuditAction, AuditEntity, changed_fields
 from app.domain.errors import BusinessValidationError, ConflictError, NotFoundError
 from app.domain.users import (
+    ensure_admin_remains,
     validate_password,
     validate_username,
     validate_work_center_assignment,
@@ -107,6 +108,9 @@ class UserService:
             password_hash = None
 
         with transaction(self._session):
+            # C-12 lock order: every active ADMIN row (id ascending) before the target
+            # row, so two admins demoting each other are serialized, never deadlocked.
+            active_admin_ids = self._users.lock_active_admin_ids() if _may_demote(update) else None
             user = self._users.get_for_update(user_id)
             if user is None:
                 raise NotFoundError("USER_NOT_FOUND", "User not found.")
@@ -132,6 +136,8 @@ class UserService:
                 user.active = update.active
             if password_hash is not None:
                 user.password_hash = password_hash
+            if active_admin_ids is not None:
+                ensure_admin_remains(user.id, before, _snapshot(user), active_admin_ids)
             self._session.flush()
 
             old_value, new_value = changed_fields(before, _snapshot(user))
@@ -157,6 +163,10 @@ class UserService:
             raise BusinessValidationError("WORK_CENTER_NOT_FOUND", "Work center does not exist.")
         if not work_center.active:
             raise ConflictError("WORK_CENTER_INACTIVE", "Work center is inactive.")
+
+
+def _may_demote(update: UserUpdate) -> bool:
+    return "role" in update.provided or "active" in update.provided
 
 
 def _username_taken() -> ConflictError:

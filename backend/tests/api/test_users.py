@@ -254,3 +254,48 @@ def test_no_op_update_writes_no_audit_row(
     response = db_client.patch(f"{USERS}/{target.id}", json={"role": "WAREHOUSE"}, headers=admin)
     assert response.status_code == 200
     assert db_session.scalars(select(AuditLog).where(AuditLog.action.like("USER_%"))).all() == []
+
+
+# --- C-12: the last active ADMIN is protected ------------------------------------------
+
+
+def _me(client: TestClient, headers: dict[str, str]) -> int:
+    user_id: int = client.get("/api/v1/auth/me", headers=headers).json()["id"]
+    return user_id
+
+
+@pytest.mark.parametrize(
+    "change", [{"active": False}, {"role": "WAREHOUSE"}], ids=["deactivate", "demote"]
+)
+def test_c12_sole_admin_cannot_remove_their_own_admin_access(
+    db_client: TestClient, db_session: Session, admin: dict[str, str], change: dict[str, Any]
+) -> None:
+    response = db_client.patch(f"{USERS}/{_me(db_client, admin)}", json=change, headers=admin)
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "LAST_ADMIN"
+    assert db_client.get("/api/v1/auth/me", headers=admin).json()["role"] == "ADMIN"
+    assert audit_rows(db_session, "USER_DEACTIVATED") == []
+
+
+def test_c12_admin_can_step_down_while_another_admin_remains(
+    db_client: TestClient, admin: dict[str, str], user_factory
+) -> None:
+    user_factory(role=Role.ADMIN)
+    response = db_client.patch(
+        f"{USERS}/{_me(db_client, admin)}", json={"role": "WAREHOUSE"}, headers=admin
+    )
+    assert response.status_code == 200
+
+
+def test_c12_remaining_admin_is_protected_after_the_other_is_deactivated(
+    db_client: TestClient, admin: dict[str, str], user_factory
+) -> None:
+    other = user_factory(role=Role.ADMIN)
+    assert (
+        db_client.patch(f"{USERS}/{other.id}", json={"active": False}, headers=admin).status_code
+        == 200
+    )
+    response = db_client.patch(
+        f"{USERS}/{_me(db_client, admin)}", json={"active": False}, headers=admin
+    )
+    assert response.json()["error"]["code"] == "LAST_ADMIN"

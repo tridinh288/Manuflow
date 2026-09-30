@@ -16,10 +16,11 @@ Mã `C-xx` được dùng để không trùng với `D-xx`. Khi chủ dự án c
 | C-09 | B9 | `time_ratio` chia cho 0 khi `due_date = started_at`; dòng `NOT_STARTED_DUE_SOON` cho MATERIAL_SHORTAGE không bao giờ khớp | Mẫu số ≤ 0 thì `time_ratio = 1`; giữ nguyên dòng dư thừa, ghi chú lại | Phase 6 |
 | C-10 | BR-OP-01, BR-OP-03 | Không điều chỉnh được công đoạn đã COMPLETED | Giữ nguyên; ghi vào README như một giới hạn | Phase 6 |
 | C-11 | Part A (Quy tắc cứng), skill `git-pr-workflow` | Chủ dự án muốn AI merge PR thay mình | AI được merge **chỉ khi chủ dự án yêu cầu rõ ràng cho đúng PR đó** và CI xanh, bằng `--merge --delete-branch`; cấm `--admin`/`--auto`/`--squash`/`--rebase`. `CLAUDE.md` và skill đã cập nhật (2026-09-30); phần A của `requirements.md` cần được chủ dự án cập nhật ở bản gốc | Ngay |
+| C-12 | BR-AUTH, B4, D-17 | Đặc tả không ngăn việc vô hiệu hóa hoặc hạ vai trò ADMIN cuối cùng, khiến hệ thống có thể mất hết quản trị viên | Từ chối 409 `LAST_ADMIN` khi thay đổi làm ADMIN active cuối cùng mất quyền. Service khóa mọi dòng ADMIN active (theo `id`) trước dòng đích, để hai admin hạ nhau cùng lúc được tuần tự hóa | Phase 2 |
 
 ## Ghi chú triển khai
 
 - C-01, C-02 (phần `require` một quyền/route), C-03, C-06, C-08: đã triển khai ở Phase 2.
 - Thứ tự khóa toàn cục của B12 được mở rộng: `idempotency_keys` đứng **trước** `document_sequences`, vì dòng key luôn được INSERT đầu tiên trong transaction (C-03).
 - Fingerprint của request là HMAC-SHA256 với khóa phía server, vì body có thể chứa mật khẩu (`POST /users`). Nếu dùng hash không khóa, dữ liệu lưu trong DB có thể bị brute-force ngoại tuyến.
-- Câu hỏi còn mở: có chặn vô hiệu hóa hoặc hạ vai trò của ADMIN active cuối cùng không (đề xuất: 409 `LAST_ADMIN`)?
+- C-12 được chủ dự án duyệt ngày 2026-09-30 và triển khai ở Phase 2.
