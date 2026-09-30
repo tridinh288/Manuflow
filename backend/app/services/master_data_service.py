@@ -24,6 +24,7 @@ from app.repositories.master_data_repository import (
     ProductRepository,
     WorkCenterRepository,
 )
+from app.repositories.routing_repository import RoutingRepository
 from app.services.audit_service import AuditService
 from app.services.context import Actor, RequestContext
 
@@ -349,8 +350,9 @@ class WorkCenterService(_MasterDataService):
         return work_center
 
     def deactivate(self, work_center_id: int, actor: Actor, context: RequestContext) -> None:
-        """D-19 + C-07: refused while active WORKERs are assigned to it (and, once
-        routings exist, while an ACTIVE routing uses it)."""
+        """D-19 + C-07: refused while active WORKERs are assigned to it or an ACTIVE
+        routing uses it. The row lock is the one routing activation and worker
+        assignment take, so neither can race a deactivation."""
         with transaction(self._session):
             work_center = self._work_centers.get_for_update(work_center_id)
             if work_center is None:
@@ -363,6 +365,18 @@ class WorkCenterService(_MasterDataService):
                     "WORK_CENTER_IN_USE",
                     "Active workers are still assigned to this work center.",
                     [{"reason": "ACTIVE_WORKERS", "count": workers}],
+                )
+            routings = RoutingRepository(self._session).work_center_in_active_routing(
+                work_center.id
+            )
+            if routings:
+                raise ConflictError(
+                    "WORK_CENTER_IN_USE",
+                    "The work center is used by an ACTIVE routing.",
+                    [
+                        {"reason": "ACTIVE_ROUTING", "product_code": code, "routing_version": v}
+                        for code, v in routings
+                    ],
                 )
             work_center.active = False
             self._session.flush()

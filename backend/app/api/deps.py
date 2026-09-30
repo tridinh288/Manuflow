@@ -13,6 +13,7 @@ from app.services.auth_service import AuthenticatedUser, AuthService
 from app.services.bom_service import BomService
 from app.services.context import RequestContext
 from app.services.master_data_service import MaterialService, ProductService, WorkCenterService
+from app.services.routing_service import RoutingService
 from app.services.user_service import UserService
 
 _MAX_IP_LENGTH = 45
@@ -85,3 +86,10 @@ def get_bom_service(
     clock: Annotated[Clock, Depends(get_clock)],
 ) -> BomService:
     return BomService(session, clock)
+
+
+def get_routing_service(
+    session: Annotated[Session, Depends(get_session)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> RoutingService:
+    return RoutingService(session, clock)

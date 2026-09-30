@@ -7,7 +7,8 @@ This project is a student/personal simulation of an internal manufacturing manag
 > idempotent mutations; products, materials (with their zero inventory balance) and work
 > centers with immutable codes and deactivate-only deletes; versioned BOMs (DRAFT → ACTIVE →
 > RETIRED, one ACTIVE per product enforced by a generated column and unique index) and BOM
-> explosion (`POST /products/{id}/bom/explode`, rounded up per material, e.g. 58.8 → 59 bolts).
+> explosion (`POST /products/{id}/bom/explode`, rounded up per material, e.g. 58.8 → 59 bolts);
+> versioned routings whose last step must be QC.
 
 ## Quick start
 

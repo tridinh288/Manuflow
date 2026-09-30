@@ -39,6 +39,7 @@ from app.domain.errors import (
 from app.main import create_app
 from app.models.bom import BomHeader, BomItem
 from app.models.master_data import Inventory, Material, Product
+from app.models.routing import Routing, RoutingStep
 from app.models.user import User
 from app.models.warehouse import DEFAULT_WAREHOUSE_CODE, Warehouse
 from app.models.work_center import WorkCenter
@@ -172,6 +173,33 @@ ProductFactory = Callable[..., Product]
 MaterialFactory = Callable[..., Material]
 WorkCenterFactory = Callable[..., WorkCenter]
 BomFactory = Callable[..., BomHeader]
+RoutingFactory = Callable[..., Routing]
+
+
+@pytest.fixture
+def routing_factory(db_session: Session) -> RoutingFactory:
+    """A routing version with steps ``(sequence, operation_type, work_center)``."""
+
+    def create(
+        product: Product,
+        steps: list[tuple[int, str, WorkCenter]],
+        *,
+        version: int = 1,
+        status: str = "DRAFT",
+    ) -> Routing:
+        routing = Routing(
+            product_id=product.id,
+            version=version,
+            status=status,
+            steps=[
+                RoutingStep(sequence=seq, operation_type=op, work_center_id=wc.id)
+                for seq, op, wc in steps
+            ],
+        )
+        insert(db_session, routing)
+        return routing
+
+    return create
 
 
 @pytest.fixture
