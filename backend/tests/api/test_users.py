@@ -108,7 +108,7 @@ def test_d18_non_worker_cannot_have_work_center(
     assert response.json()["error"]["code"] == "WORK_CENTER_NOT_ALLOWED"
 
 
-def test_inactive_work_center_cannot_be_assigned(
+def test_br_md_04_inactive_work_center_cannot_be_assigned(
     db_client: TestClient, db_session: Session, admin: dict[str, str], work_center_factory
 ) -> None:
     work_center: WorkCenter = work_center_factory()

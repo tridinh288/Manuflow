@@ -19,8 +19,8 @@ from app.domain.users import (
     validate_work_center_assignment,
 )
 from app.models.user import User
+from app.repositories.master_data_repository import WorkCenterRepository
 from app.repositories.user_repository import UserRepository
-from app.repositories.work_center_repository import WorkCenterRepository
 from app.services.audit_service import AuditService
 from app.services.context import Actor, RequestContext
 
@@ -158,7 +158,9 @@ class UserService:
     def _ensure_assignable_work_center(self, work_center_id: int | None) -> None:
         if work_center_id is None:
             return
-        work_center = self._work_centers.get(work_center_id)
+        # Row lock: serializes with a concurrent deactivation of the same work center,
+        # which counts active workers under the same lock (C-07).
+        work_center = self._work_centers.get_for_update(work_center_id)
         if work_center is None:
             raise BusinessValidationError("WORK_CENTER_NOT_FOUND", "Work center does not exist.")
         if not work_center.active:

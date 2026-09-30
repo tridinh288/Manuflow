@@ -11,6 +11,7 @@ from app.core.clock import Clock
 from app.domain.errors import AuthenticationError
 from app.services.auth_service import AuthenticatedUser, AuthService
 from app.services.context import RequestContext
+from app.services.master_data_service import MaterialService, ProductService, WorkCenterService
 from app.services.user_service import UserService
 
 _MAX_IP_LENGTH = 45
@@ -62,3 +63,17 @@ def get_user_service(
     request: Request, session: Annotated[Session, Depends(get_session)]
 ) -> UserService:
     return UserService(session, request.app.state.password_hasher)
+
+
+def get_product_service(session: Annotated[Session, Depends(get_session)]) -> ProductService:
+    return ProductService(session)
+
+
+def get_material_service(session: Annotated[Session, Depends(get_session)]) -> MaterialService:
+    return MaterialService(session)
+
+
+def get_work_center_service(
+    session: Annotated[Session, Depends(get_session)],
+) -> WorkCenterService:
+    return WorkCenterService(session)

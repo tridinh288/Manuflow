@@ -19,10 +19,16 @@ class AuditAction(StrEnum):
     USER_ROLE_CHANGED = "USER_ROLE_CHANGED"
     USER_DEACTIVATED = "USER_DEACTIVATED"
     USER_REACTIVATED = "USER_REACTIVATED"
+    MASTER_CREATED = "MASTER_CREATED"
+    MASTER_UPDATED = "MASTER_UPDATED"
+    MASTER_DEACTIVATED = "MASTER_DEACTIVATED"
 
 
 class AuditEntity(StrEnum):
     USER = "user"
+    PRODUCT = "product"
+    MATERIAL = "material"
+    WORK_CENTER = "work_center"
 
 
 def is_sensitive_key(key: str) -> bool:

@@ -69,3 +69,60 @@ def test_br_md_01_work_center_code_format_enforced_by_db(db_session: Session, co
         db_session.execute(
             text("INSERT INTO work_centers (code, name) VALUES (:code, 'x')"), {"code": code}
         )
+
+
+# --- Phase 3: products, materials, inventory ----------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("sql", "constraint"),
+    [
+        (
+            "INSERT INTO materials (material_code, name, unit, decimal_places) "
+            "VALUES ('BOLT-X', 'Bolt', 'pcs', 2)",
+            "pcs_whole_units",
+        ),
+        (
+            "INSERT INTO materials (material_code, name, unit, decimal_places) "
+            "VALUES ('BOX-X', 'Box', 'box', 0)",
+            "unit_valid",
+        ),
+        (
+            "INSERT INTO materials (material_code, name, unit, decimal_places, minimum_stock) "
+            "VALUES ('NEG-X', 'Neg', 'kg', 3, -1)",
+            "minimum_stock_non_negative",
+        ),
+        (
+            "INSERT INTO products (product_code, name, unit) VALUES ('KG-PROD', 'X', 'kg')",
+            "unit_pcs",
+        ),
+    ],
+    ids=["pcs-decimals", "unit", "minimum-stock", "product-unit"],
+)
+def test_br_md_02_material_and_product_rules_enforced_by_db(
+    db_session: Session, sql: str, constraint: str
+) -> None:
+    with pytest.raises(DBAPIError, match=constraint), db_session.begin():
+        db_session.execute(text(sql))
+
+
+@pytest.mark.parametrize(
+    ("on_hand", "reserved", "constraint"),
+    [
+        ("-1", "0", "on_hand_non_negative"),
+        ("10", "-1", "reserved_non_negative"),
+        ("10", "10.0001", "reserved_within_on_hand"),
+    ],
+)
+def test_br_inv_02_available_can_never_go_negative_at_db_level(
+    db_session: Session, material_factory, on_hand: str, reserved: str, constraint: str
+) -> None:
+    material = material_factory()
+    with pytest.raises(DBAPIError, match=constraint), db_session.begin():
+        db_session.execute(
+            text(
+                "UPDATE inventory SET on_hand_quantity = :on_hand, reserved_quantity = :reserved "
+                "WHERE material_id = :material_id"
+            ),
+            {"on_hand": on_hand, "reserved": reserved, "material_id": material.id},
+        )
