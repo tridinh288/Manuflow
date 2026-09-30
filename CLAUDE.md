@@ -48,7 +48,8 @@ Stack: Python 3.12, FastAPI (đồng bộ), SQLAlchemy 2.x, Alembic, Pydantic v2
 - Không bao giờ nói test đã pass nếu chưa chạy trong phiên này và chưa thấy output.
 - Không nói một phase đã xong khi còn mục nào trong Definition of Done chưa đạt.
 - Không bắt đầu phase tiếp theo khi chủ dự án chưa duyệt. PR được merge vào `main` là tín hiệu duyệt.
-- Không push thẳng lên `main`, không force-push, không merge PR, không dùng `--no-verify`.
+- Không push thẳng lên `main`, không force-push, không dùng `--no-verify`.
+- Chỉ merge PR khi chủ dự án yêu cầu rõ ràng cho đúng PR đó trong phiên hiện tại và CI đã xanh; lời yêu cầu đó là tín hiệu duyệt. Chỉ dùng `gh pr merge <số> --merge --delete-branch`; không bao giờ `--admin`, `--auto`, `--squash`, `--rebase`, và không tự merge chỉ vì CI xanh.
 - Không thêm Redis, Celery, message queue, microservices, CQRS, event sourcing, Kubernetes.
 - Không thêm thư viện mà không nêu vấn đề cụ thể nó giải quyết.
 - Không sửa test cho yếu đi để nó pass. Nếu test lộ ra vấn đề của đặc tả, hãy báo lại.

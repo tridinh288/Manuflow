@@ -1,0 +1,30 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: detect-private-key
+  - repo: local
+    hooks:
+      # Same ruff/mypy versions and config as CI (installed with `pip install -e "backend[dev]"`).
+      - id: ruff
+        name: ruff check
+        entry: bash -c 'cd backend && ruff check --fix .'
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: ruff-format
+        name: ruff format
+        entry: bash -c 'cd backend && ruff format .'
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: mypy
+        name: mypy
+        entry: bash -c 'cd backend && mypy'
+        language: system
+        types: [python]
+        pass_filenames: false
