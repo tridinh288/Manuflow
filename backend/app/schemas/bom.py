@@ -1,10 +1,11 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.domain.bom import VersionStatus
+from app.domain.explode import MaterialRequirement
 from app.domain.quantities import MAX_DECIMAL_PLACES, format_quantity
 from app.services.bom_service import BomView
 
@@ -66,3 +67,40 @@ class BomResponse(BaseModel):
 
 def to_decimal(value: str) -> Decimal:
     return Decimal(value)
+
+
+class ExplodeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Validated by the domain so every wrong value gets 422 INVALID_QUANTITY (B5):
+    # 0, -1, 1.5, "100" and true are all rejected, not coerced.
+    quantity: Any
+    bom_header_id: int | None = Field(default=None, gt=0)
+
+
+class MaterialRequirementResponse(BaseModel):
+    material_id: int
+    material_code: str
+    unit: str
+    qty_per_unit: str
+    scrap_rate: str
+    required_quantity: str
+
+    @classmethod
+    def of(cls, requirement: MaterialRequirement) -> "MaterialRequirementResponse":
+        return cls(
+            material_id=requirement.material_id,
+            material_code=requirement.material_code,
+            unit=requirement.unit,
+            qty_per_unit=format_quantity(requirement.qty_per_unit, MAX_DECIMAL_PLACES),
+            scrap_rate=format_quantity(requirement.scrap_rate, MAX_DECIMAL_PLACES),
+            required_quantity=format_quantity(
+                requirement.required_quantity, requirement.decimal_places
+            ),
+        )
+
+
+class ExplodeResponse(BaseModel):
+    product_id: int
+    quantity: int
+    items: list[MaterialRequirementResponse]

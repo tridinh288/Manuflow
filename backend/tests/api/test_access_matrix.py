@@ -52,6 +52,7 @@ ENDPOINT_ACCESS: dict[tuple[str, str], AccessRule] = {
     ("POST", "/api/v1/products/{product_id}/boms"): perm(Permission.BOM_WRITE),
     ("PUT", "/api/v1/boms/{bom_id}/items"): perm(Permission.BOM_WRITE),
     ("POST", "/api/v1/boms/{bom_id}/activate"): perm(Permission.BOM_WRITE),
+    ("POST", "/api/v1/products/{product_id}/bom/explode"): perm(Permission.MASTER_READ),
 }
 
 
@@ -168,6 +169,11 @@ PROTECTED_CALLS: list[Call] = [
         json=lambda n: {"items": [{"material_id": 0, "qty_per_unit": f"{n}"}]},
     ),
     Call("POST", "/api/v1/boms/{bom_id}/activate"),
+    Call(
+        "POST",
+        "/api/v1/products/{product_id}/bom/explode",
+        json=lambda n: {"quantity": n, "bom_header_id": 0},
+    ),
 ]
 
 
@@ -199,6 +205,8 @@ def _send(
 ) -> int:
     path = call.path.format(**targets)
     body = call.json(n) if call.json else None
+    if body and "bom_header_id" in body:  # explode the target's own DRAFT version
+        body = {**body, "bom_header_id": targets["bom_id"]}
     if body and "items" in body:  # BOM lines need a real material
         lines = [{**line, "material_id": targets["component_id"]} for line in body["items"]]
         body = {"items": lines}
