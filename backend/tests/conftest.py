@@ -45,6 +45,15 @@ TEST_JWT_SECRET = "test-only-jwt-secret-0123456789abcdef"
 UNREACHABLE_DB_URL = "mysql+pymysql://nobody:nothing@127.0.0.1:1/none"
 
 
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Run concurrency tests last.
+
+    They must commit real data, and audit rows they cause can never be deleted
+    (BR-AUD-06), so they run after every test that counts rows.
+    """
+    items.sort(key=lambda item: item.get_closest_marker("concurrency") is not None)
+
+
 def _require_env(name: str) -> str:
     value = os.environ.get(name)
     if not value:

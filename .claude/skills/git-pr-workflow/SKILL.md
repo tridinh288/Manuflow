@@ -139,7 +139,8 @@ Chỉ chạy mục này khi chủ dự án nói rõ muốn merge **đúng PR đ�
 
 1. `gh pr view <số> --json state,mergeable,mergeStateStatus` → phải là `OPEN`, `MERGEABLE`, `CLEAN`. Khác đi (CI fail/đang chạy, xung đột, nhánh chưa cập nhật): dừng và báo, không tìm cách vượt qua.
 2. `gh pr checks <số>` → mọi check bắt buộc đều pass.
-3. `gh pr merge <số> --merge --delete-branch`. Không bao giờ dùng `--admin` (vượt branch protection), `--auto`, `--squash` hay `--rebase`.
+3. `gh pr merge <số> --merge --delete-branch`.
+    - **Stacked PR:** nếu còn PR khác lấy nhánh của PR này làm base, merge **không** kèm `--delete-branch`, rồi `gh pr edit <PR phụ thuộc> --base main`, rồi mới `git push origin --delete <nhánh>`. Xóa nhánh base qua API khiến GitHub tự đóng PR phụ thuộc. Sau đó merge `origin/main` vào nhánh PR phụ thuộc và push, vì branch protection yêu cầu nhánh phải cập nhật với `main`. Không bao giờ dùng `--admin` (vượt branch protection), `--auto`, `--squash` hay `--rebase`.
 4. Lỗi mạng hoặc 5xx: kiểm tra lại bằng `gh pr view` trước khi thử lại, vì merge có thể đã thành công.
 5. Sau khi merge: `git switch main`, `git pull --ff-only origin main`, và ghi trong báo cáo: "PR #<số> được merge theo yêu cầu của chủ dự án".
 

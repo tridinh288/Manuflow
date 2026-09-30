@@ -3,9 +3,10 @@
 import pytest
 
 from app.core.permissions import Role
-from app.domain.errors import BusinessValidationError, NotFoundError
+from app.domain.errors import BusinessValidationError, ConflictError, NotFoundError
 from app.domain.scope import ensure_in_scope, work_center_scope
 from app.domain.users import (
+    ensure_admin_remains,
     validate_password,
     validate_username,
     validate_work_center_assignment,
@@ -67,3 +68,38 @@ def test_br_auth_03_other_work_center_is_reported_as_not_found() -> None:
 def test_br_auth_03_worker_without_work_center_fails_closed() -> None:
     with pytest.raises(NotFoundError):
         work_center_scope(Role.WORKER, None)
+
+
+# --- C-12: the last active ADMIN is protected ------------------------------------------
+
+ADMIN_ACTIVE = {"role": Role.ADMIN, "active": True}
+
+
+@pytest.mark.parametrize(
+    "after",
+    [{"role": Role.ADMIN, "active": False}, {"role": Role.WAREHOUSE, "active": True}],
+    ids=["deactivated", "demoted"],
+)
+def test_c12_last_active_admin_cannot_be_deactivated_or_demoted(after: dict[str, object]) -> None:
+    with pytest.raises(ConflictError) as exc_info:
+        ensure_admin_remains(1, ADMIN_ACTIVE, after, active_admin_ids=[1])
+    assert exc_info.value.code == "LAST_ADMIN"
+
+
+def test_c12_admin_can_be_demoted_while_another_admin_remains() -> None:
+    ensure_admin_remains(1, ADMIN_ACTIVE, {"role": Role.ADMIN, "active": False}, [1, 2])
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        (ADMIN_ACTIVE, ADMIN_ACTIVE),  # untouched admin
+        ({"role": Role.WAREHOUSE, "active": True}, {"role": Role.WAREHOUSE, "active": False}),
+        ({"role": Role.ADMIN, "active": False}, {"role": Role.WAREHOUSE, "active": False}),
+    ],
+    ids=["no-change", "non-admin", "already-inactive-admin"],
+)
+def test_c12_changes_that_do_not_remove_an_active_admin_are_allowed(
+    before: dict[str, object], after: dict[str, object]
+) -> None:
+    ensure_admin_remains(1, before, after, active_admin_ids=[])

@@ -34,6 +34,20 @@ Mỗi mục ghi: AI đã viết gì, test hoặc review nào phát hiện, sửa
 - **Sửa:** xóa test đó. C-08 được kiểm tra bởi `test_c08_expired_key_is_treated_as_new` (đăng nhập lại trước mỗi request) và bằng cách cố tình phá `is_expired` → 2 test fail.
 - **PR:** phase-2/idempotency.
 
+### 5. Merge PR xếp chồng làm GitHub tự đóng PR phụ thuộc (Phase 2, quy trình Git)
+
+- **AI làm:** merge PR #2 bằng `gh pr merge --merge --delete-branch`, trong khi PR #3 dùng nhánh của #2 làm base. Xóa nhánh base qua API khiến GitHub **tự đóng** #3 thay vì tự đổi base của nó.
+- **Phát hiện bởi:** `gh pr edit 3 --base main` thất bại với lỗi "Cannot change the base branch of a closed pull request".
+- **Sửa:** tạo lại nhánh base tại đúng commit cũ, mở lại #3, đổi base về `main`, rồi xóa nhánh tạm. Không mất commit nào. Với #3 → #4, AI làm theo thứ tự đúng: merge không xóa nhánh → đổi base của PR phụ thuộc → xóa nhánh. Skill `git-pr-workflow` (mục C) đã thêm bước này.
+- **PR:** #2, #3; quy trình được sửa trong phase-2/last-admin-guard.
+
+### 6. Test đồng thời pass sai lý do: khóa khóa ngoại thay vì khóa của cơ chế chặn (Phase 2)
+
+- **AI viết:** test C-12 giữ khóa dòng `admin_1`, rồi khẳng định request vô hiệu hóa `admin_2` phải chờ. Actor của request lại chính là `admin_1`, nên dòng audit có FK `actor_user_id = admin_1`, và InnoDB lấy shared lock trên dòng cha khi kiểm tra FK. Request bị chặn **vì khóa ngoại**, không phải vì cơ chế chặn khóa các dòng ADMIN.
+- **Phát hiện bởi:** cố tình phá code, bỏ `FOR UPDATE` ở `lock_active_admin_ids`: test đồng thời vẫn pass.
+- **Sửa:** dùng actor không có dòng user (`user_id=None`), để test chỉ còn đo khóa ADMIN. Phá lại: bỏ `FOR UPDATE` → 2 test fail; khôi phục → pass. Test race cũng được siết lại, từ chấp nhận cả `["OK", "OK"]` thành bắt buộc đúng một `LAST_ADMIN`.
+- **PR:** phase-2/last-admin-guard.
+
 ## Rà soát đặc tả
 
 Ở bước rà soát (B20), AI tìm ra 10 điểm mâu thuẫn hoặc còn thiếu trong `docs/requirements.md`. Các điểm này được ghi lại cùng quyết định đã duyệt trong [`decisions.md`](decisions.md).

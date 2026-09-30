@@ -3,6 +3,7 @@ from collections.abc import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.permissions import Role
 from app.models.user import User
 
 
@@ -27,6 +28,17 @@ class UserRepository:
             .with_for_update()
             .execution_options(populate_existing=True)
         ).one_or_none()
+
+    def lock_active_admin_ids(self) -> list[int]:
+        """Lock every active ADMIN row in id order and return their ids (C-12)."""
+        return list(
+            self._session.scalars(
+                select(User.id)
+                .where(User.role == Role.ADMIN, User.active.is_(True))
+                .order_by(User.id)
+                .with_for_update()
+            )
+        )
 
     def username_exists(self, username: str) -> bool:
         # Compared with the column collation (case-insensitive), like the unique index.
