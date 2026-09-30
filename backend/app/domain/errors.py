@@ -13,6 +13,8 @@ ErrorDetail = Mapping[str, str | int | None]
 
 
 class ErrorCategory(StrEnum):
+    UNAUTHENTICATED = "UNAUTHENTICATED"
+    FORBIDDEN = "FORBIDDEN"
     NOT_FOUND = "NOT_FOUND"
     CONFLICT = "CONFLICT"
     VALIDATION = "VALIDATION"
@@ -27,6 +29,14 @@ class DomainError(Exception):
         self.code = code
         self.message = message
         self.details = [dict(detail) for detail in details]
+
+
+class AuthenticationError(DomainError):
+    category = ErrorCategory.UNAUTHENTICATED
+
+
+class PermissionDeniedError(DomainError):
+    category = ErrorCategory.FORBIDDEN
 
 
 class NotFoundError(DomainError):

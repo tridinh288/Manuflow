@@ -1,6 +1,8 @@
 """Schema built by Alembic matches B2 / B11 / D-01."""
 
+import pytest
 from sqlalchemy import select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.models.warehouse import DEFAULT_WAREHOUSE_CODE, Warehouse
@@ -43,3 +45,27 @@ def test_b16_application_user_cannot_run_ddl(db_session: Session) -> None:
         assert "CREATE" not in grant
         assert "DROP" not in grant
         assert "ALTER" not in grant
+
+
+INSERT_USER = text(
+    "INSERT INTO users (username, password_hash, full_name, role, work_center_id) "
+    "VALUES (:username, 'x', 'Test', :role, NULL)"
+)
+
+
+def test_d18_worker_without_work_center_rejected_by_db(db_session: Session) -> None:
+    with pytest.raises(DBAPIError, match="worker_has_work_center"), db_session.begin():
+        db_session.execute(INSERT_USER, {"username": "worker-x", "role": "WORKER"})
+
+
+def test_d17_unknown_role_rejected_by_db(db_session: Session) -> None:
+    with pytest.raises(DBAPIError, match="role_valid"), db_session.begin():
+        db_session.execute(INSERT_USER, {"username": "root-x", "role": "SUPERUSER"})
+
+
+@pytest.mark.parametrize("code", ["wc-weld", "WC", "WC WELD", "WC_WELD"])
+def test_br_md_01_work_center_code_format_enforced_by_db(db_session: Session, code: str) -> None:
+    with pytest.raises(DBAPIError, match="code_format"), db_session.begin():
+        db_session.execute(
+            text("INSERT INTO work_centers (code, name) VALUES (:code, 'x')"), {"code": code}
+        )

@@ -6,9 +6,11 @@ outer transaction that is rolled back at the end; the session joins it with SAVE
 so service code can still use ``with session.begin():`` normally.
 """
 
+import itertools
 import logging
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -20,8 +22,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_session
+from app.api.deps import get_clock, get_session
+from app.core.clock import FixedClock
 from app.core.config import Environment, Settings
+from app.core.permissions import Role
+from app.core.security import PasswordHasher
 from app.db.session import build_engine
 from app.domain.errors import (
     BusinessValidationError,
@@ -31,6 +36,8 @@ from app.domain.errors import (
     NotFoundError,
 )
 from app.main import create_app
+from app.models.user import User
+from app.models.work_center import WorkCenter
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 TEST_JWT_SECRET = "test-only-jwt-secret-0123456789abcdef"
@@ -60,8 +67,13 @@ def settings() -> Settings:
 
 
 @pytest.fixture
-def app(settings: Settings) -> FastAPI:
-    return create_app(settings)
+def clock() -> FixedClock:
+    return FixedClock(datetime(2026, 9, 30, 8, 0, tzinfo=UTC))
+
+
+@pytest.fixture
+def app(settings: Settings, clock: FixedClock) -> FastAPI:
+    return create_app(settings, clock=clock)
 
 
 @pytest.fixture
@@ -106,11 +118,85 @@ def db_session(db_engine: Engine) -> Iterator[Session]:
 
 
 @pytest.fixture
-def db_client(app: FastAPI, db_session: Session) -> Iterator[TestClient]:
-    app.dependency_overrides[get_session] = lambda: db_session
+def db_client(app: FastAPI, db_session: Session, clock: FixedClock) -> Iterator[TestClient]:
+    def request_session() -> Iterator[Session]:
+        # Production gives every request a fresh session. Mirror that: close whatever
+        # transaction the test body opened while reading (only a SAVEPOINT here).
+        if db_session.in_transaction():
+            db_session.commit()
+        yield db_session
+
+    app.dependency_overrides[get_session] = request_session
+    app.dependency_overrides[get_clock] = lambda: clock
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+# --- Data factories -------------------------------------------------------------------
+
+DEFAULT_PASSWORD = "correct-horse-battery-staple"
+_hasher = PasswordHasher()
+_hash_cache: dict[str, str] = {}
+
+
+def hash_password(password: str) -> str:
+    # Argon2 is slow on purpose; hash each distinct test password once per run.
+    if password not in _hash_cache:
+        _hash_cache[password] = _hasher.hash(password)
+    return _hash_cache[password]
+
+
+def insert(session: Session, *rows: object) -> None:
+    """Commit test data through the same SAVEPOINT-per-transaction path services use."""
+    if session.in_transaction():
+        session.commit()
+    with session.begin():
+        session.add_all(rows)
+
+
+WorkCenterFactory = Callable[..., WorkCenter]
+UserFactory = Callable[..., User]
+
+
+@pytest.fixture
+def work_center_factory(db_session: Session) -> WorkCenterFactory:
+    sequence = itertools.count(1)
+
+    def create(code: str | None = None, name: str = "Work center") -> WorkCenter:
+        work_center = WorkCenter(code=code or f"WC-T{next(sequence):03d}", name=name)
+        insert(db_session, work_center)
+        return work_center
+
+    return create
+
+
+@pytest.fixture
+def user_factory(db_session: Session, work_center_factory: WorkCenterFactory) -> UserFactory:
+    sequence = itertools.count(1)
+
+    def create(
+        username: str | None = None,
+        *,
+        role: Role = Role.PRODUCTION_MANAGER,
+        password: str = DEFAULT_PASSWORD,
+        active: bool = True,
+        work_center_id: int | None = None,
+    ) -> User:
+        if role is Role.WORKER and work_center_id is None:
+            work_center_id = work_center_factory().id
+        user = User(
+            username=username or f"user{next(sequence):03d}",
+            password_hash=hash_password(password),
+            full_name="Test User",
+            role=role,
+            work_center_id=work_center_id,
+            active=active,
+        )
+        insert(db_session, user)
+        return user
+
+    return create
 
 
 # --- Probe routes: exercise middleware and error handling without business endpoints ---
