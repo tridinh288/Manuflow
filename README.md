@@ -4,8 +4,8 @@ This project is a student/personal simulation of an internal manufacturing manag
 
 > Status: **Phase 2 — authentication and audit** (in progress). Done so far: Phase 1 foundation;
 > login with JWT access tokens, account lockout, `/auth/me`, the permission matrix,
-> server-side permission checks on every route, user administration and an append-only
-> audit log.
+> server-side permission checks on every route, user administration, an append-only
+> audit log and idempotent mutations (`Idempotency-Key`).
 > The full specification is in [`docs/requirements.md`](docs/requirements.md).
 
 ## Quick start
@@ -31,6 +31,13 @@ The admin then manages users with `GET/POST /api/v1/users` and `PATCH /api/v1/us
 Every route declares exactly one access rule (public, authenticated, or one permission
 from the B4 matrix); a test walks the router and fails on any route that does not.
 
+Idempotency (D-22): mutating requests accept an `Idempotency-Key` header (8-128 chars,
+a UUID is recommended). The key row, the business change and the stored response commit
+in one transaction, so a retry or double click returns the first response with
+`Idempotent-Replayed: true` instead of repeating the change; reusing a key for a
+different request is rejected with 422. Only successful responses are stored, and keys
+expire after 24 hours (`python -m app.cli purge-idempotency-keys` reclaims the rows).
+
 Authentication: `POST /api/v1/auth/login` with `{"username", "password"}` returns a 30-minute
 bearer token; `GET /api/v1/auth/me` returns the caller, role and permissions. Five failed
 logins within 15 minutes lock the account for 15 minutes; every failure returns the same
@@ -49,6 +56,10 @@ docker compose exec api mypy
 Integration tests run against a separate `manuflow_test` schema that Alembic rebuilds at
 the start of every run; each test is rolled back afterwards. SQLite is not used, because
 row locking and `CHECK` constraints must behave exactly like production (B2, B15).
+
+`python scripts/rule_coverage.py` lists every business rule (`BR-xx`) of the spec and
+the tests that cite it; a unit test fails if a rule of a completed phase has none.
+Concurrency tests (`-m concurrency`) use two real MySQL connections on two threads.
 
 CI (GitHub Actions) runs lint, type checks, `pip-audit` and the full test suite against a
 MySQL 8.0 service container on every pull request.

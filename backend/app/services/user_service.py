@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.permissions import Role
 from app.core.security import PasswordHasher
+from app.db.transaction import transaction
 from app.domain.audit import AuditAction, AuditEntity, changed_fields
 from app.domain.errors import BusinessValidationError, ConflictError, NotFoundError
 from app.domain.users import (
@@ -59,7 +60,7 @@ class UserService:
         self._audit = AuditService(session)
 
     def list_users(self, limit: int, offset: int) -> tuple[Sequence[User], int]:
-        with self._session.begin():
+        with transaction(self._session):
             return self._users.list_page(limit, offset)
 
     def create_user(self, data: NewUser, actor: Actor, context: RequestContext) -> User:
@@ -69,7 +70,7 @@ class UserService:
         password_hash = self._passwords.hash(data.password)  # slow: outside the transaction
 
         try:
-            with self._session.begin():
+            with transaction(self._session):
                 self._ensure_assignable_work_center(data.work_center_id)
                 if self._users.username_exists(data.username):
                     raise _username_taken()
@@ -105,7 +106,7 @@ class UserService:
         else:
             password_hash = None
 
-        with self._session.begin():
+        with transaction(self._session):
             user = self._users.get_for_update(user_id)
             if user is None:
                 raise NotFoundError("USER_NOT_FOUND", "User not found.")

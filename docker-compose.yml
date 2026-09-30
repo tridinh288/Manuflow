@@ -36,6 +36,8 @@ services:
       - "${API_HOST_PORT:-8000}:8000"
     volumes:
       - ./backend:/app
+      # Read-only spec for scripts/rule_coverage.py (B15 rule -> test report).
+      - ./docs:/docs:ro
     command: >
       sh -c "alembic upgrade head &&
              uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --reload"
