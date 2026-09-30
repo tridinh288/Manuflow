@@ -4,6 +4,8 @@ from sqlalchemy import literal, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.db.transaction import transaction
+
 logger = logging.getLogger(__name__)
 
 
@@ -13,7 +15,7 @@ class HealthService:
 
     def database_is_available(self) -> bool:
         try:
-            with self._session.begin():
+            with transaction(self._session):
                 self._session.execute(select(literal(1)))
         except SQLAlchemyError:
             # The DB error text may contain host names; keep it in the log only.

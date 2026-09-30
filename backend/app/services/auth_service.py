@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.clock import Clock
 from app.core.permissions import Permission, Role, permissions_for
 from app.core.security import InvalidTokenError, IssuedToken, PasswordHasher, TokenService
+from app.db.transaction import transaction
 from app.domain import login_policy
 from app.domain.audit import AuditAction, AuditEntity
 from app.domain.errors import AuthenticationError
@@ -66,7 +67,7 @@ class AuthService:
 
     def login(self, username: str, password: str, context: RequestContext) -> IssuedToken:
         now = self._clock.now()
-        with self._session.begin():
+        with transaction(self._session):
             user = self._users.get_by_username_for_update(username)
             outcome = self._evaluate_attempt(user, password, now)
             self._audit_attempt(user, username, outcome, context)
@@ -81,7 +82,7 @@ class AuthService:
             user_id = self._tokens.verify(token, self._clock.now())
         except InvalidTokenError as exc:
             raise AuthenticationError("INVALID_TOKEN", INVALID_TOKEN_MESSAGE) from exc
-        with self._session.begin():
+        with transaction(self._session):
             user = self._users.get(user_id)
             if user is None or not user.active:
                 raise AuthenticationError("INVALID_TOKEN", INVALID_TOKEN_MESSAGE)

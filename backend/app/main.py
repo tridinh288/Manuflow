@@ -1,5 +1,6 @@
 """Application factory: ``uvicorn app.main:create_app --factory``."""
 
+import hmac
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -33,6 +34,10 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.state.session_factory = build_session_factory(engine)
     app.state.clock = clock or SystemClock()
     app.state.password_hasher = PasswordHasher()
+    # Domain-separated from the JWT signing key (HMAC of "idempotency-fingerprint").
+    app.state.fingerprint_secret = hmac.new(
+        settings.jwt_secret.get_secret_value().encode(), b"idempotency-fingerprint", "sha256"
+    ).digest()
     app.state.token_service = TokenService(
         settings.jwt_secret.get_secret_value(), settings.jwt_expire_minutes
     )
