@@ -24,6 +24,8 @@ from app.domain.errors import DomainError, ErrorCategory
 logger = logging.getLogger(__name__)
 
 STATUS_BY_CATEGORY: dict[ErrorCategory, int] = {
+    ErrorCategory.UNAUTHENTICATED: 401,
+    ErrorCategory.FORBIDDEN: 403,
     ErrorCategory.NOT_FOUND: 404,
     ErrorCategory.CONFLICT: 409,
     ErrorCategory.VALIDATION: 422,
@@ -68,8 +70,16 @@ def error_response(
 async def _handle_domain_error(request: Request, exc: Exception) -> JSONResponse:
     if not isinstance(exc, DomainError):
         raise exc
+    headers = (
+        {"WWW-Authenticate": "Bearer"} if exc.category is ErrorCategory.UNAUTHENTICATED else None
+    )
     return error_response(
-        request, STATUS_BY_CATEGORY[exc.category], exc.code, exc.message, exc.details
+        request,
+        STATUS_BY_CATEGORY[exc.category],
+        exc.code,
+        exc.message,
+        exc.details,
+        headers=headers,
     )
 
 

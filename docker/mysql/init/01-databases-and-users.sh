@@ -7,6 +7,9 @@
 : "${MYSQL_ROOT_PASSWORD:?}" "${MYSQL_APP_PASSWORD:?}" "${MYSQL_MIGRATOR_PASSWORD:?}"
 
 MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --host="${MYSQL_HOST:-localhost}" --user=root <<SQL
+-- CI cannot pass server flags to a service container; same effect as the compose flag.
+SET GLOBAL log_bin_trust_function_creators = 1;
+
 CREATE DATABASE IF NOT EXISTS manuflow CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 CREATE DATABASE IF NOT EXISTS manuflow_test CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 

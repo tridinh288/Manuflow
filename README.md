@@ -2,7 +2,9 @@
 
 This project is a student/personal simulation of an internal manufacturing management system. It models common workflows such as BOM management, material planning, inventory reservation, production planning, and workshop progress tracking. It is not a production ERP, and the author does not claim professional manufacturing experience.
 
-> Status: **Phase 1 — foundation** (Docker Compose, settings, DB session, Alembic, health check, error format, request ID, CI).
+> Status: **Phase 2 — authentication and audit** (in progress). Done so far: Phase 1 foundation;
+> login with JWT access tokens, account lockout, `/auth/me`, the permission matrix and an
+> append-only audit log.
 > The full specification is in [`docs/requirements.md`](docs/requirements.md).
 
 ## Quick start
@@ -17,6 +19,12 @@ curl http://localhost:8000/health
 ```
 
 OpenAPI docs: <http://localhost:8000/docs>. MySQL is exposed on host port `3307`.
+
+Authentication: `POST /api/v1/auth/login` with `{"username", "password"}` returns a 30-minute
+bearer token; `GET /api/v1/auth/me` returns the caller, role and permissions. Five failed
+logins within 15 minutes lock the account for 15 minutes; every failure returns the same
+generic message. Audit rows are written in the same transaction as the change they
+describe, never contain passwords or tokens, and MySQL triggers reject any UPDATE or DELETE.
 
 ## Tests and quality checks
 

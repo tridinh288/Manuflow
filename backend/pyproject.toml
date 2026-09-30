@@ -17,6 +17,9 @@ dependencies = [
     "cryptography>=42",
     "pydantic>=2.7,<3",
     "pydantic-settings>=2.3",
+    # B2: JWT access tokens and Argon2 password hashing.
+    "pyjwt>=2.9",
+    "pwdlib[argon2]>=0.2",
 ]
 
 [project.optional-dependencies]
