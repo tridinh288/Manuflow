@@ -25,6 +25,9 @@ class AuditAction(StrEnum):
     BOM_CREATED = "BOM_CREATED"
     BOM_ITEMS_REPLACED = "BOM_ITEMS_REPLACED"
     BOM_ACTIVATED = "BOM_ACTIVATED"
+    ROUTING_CREATED = "ROUTING_CREATED"
+    ROUTING_STEPS_REPLACED = "ROUTING_STEPS_REPLACED"
+    ROUTING_ACTIVATED = "ROUTING_ACTIVATED"
 
 
 class AuditEntity(StrEnum):
@@ -33,6 +36,7 @@ class AuditEntity(StrEnum):
     MATERIAL = "material"
     WORK_CENTER = "work_center"
     BOM = "bom"
+    ROUTING = "routing"
 
 
 def is_sensitive_key(key: str) -> bool:

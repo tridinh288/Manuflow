@@ -28,3 +28,4 @@ Mã `C-xx` được dùng để không trùng với `D-xx`. Khi chủ dự án c
 - C-12 được chủ dự án duyệt ngày 2026-09-30 và triển khai ở Phase 2.
 - C-13, C-14 được chủ dự án duyệt ngày 2026-09-30 ("làm theo kế hoạch đó đi").
 - Bảng `inventory` được tạo ở Phase 3 (không đợi Phase 4) để mỗi vật tư có dòng tồn kho bằng 0 ngay khi được tạo (BR-INV-01).
+- C-07 hoàn tất ở Phase 3: work center bị chặn vô hiệu hóa khi còn WORKER active hoặc nằm trong routing ACTIVE. Gán WORKER và kích hoạt routing đều khóa dòng work center.

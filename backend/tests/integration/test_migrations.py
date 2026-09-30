@@ -182,3 +182,48 @@ def test_br_bom_01_line_ranges_enforced_by_db(
             ),
             {"header": header.id, "material": material.id, "qty": qty, "scrap": scrap},
         )
+
+
+# --- Routing integrity enforced by the database -----------------------------------------
+
+
+def test_br_rt_01_duplicate_sequence_rejected_by_db(
+    db_session: Session, product_factory, work_center_factory, routing_factory
+) -> None:
+    station = work_center_factory()
+    routing = routing_factory(product_factory(), [(10, "QC", station)])
+    with pytest.raises(DBAPIError, match="Duplicate entry"), db_session.begin():
+        db_session.execute(
+            text(
+                "INSERT INTO routing_steps (routing_id, sequence, operation_type, work_center_id) "
+                "VALUES (:routing, 10, 'CNC', :station)"
+            ),
+            {"routing": routing.id, "station": station.id},
+        )
+
+
+def test_br_rt_02_unknown_operation_type_rejected_by_db(
+    db_session: Session, product_factory, work_center_factory, routing_factory
+) -> None:
+    station = work_center_factory()
+    routing = routing_factory(product_factory(), [])
+    with pytest.raises(DBAPIError, match="operation_type_valid"), db_session.begin():
+        db_session.execute(
+            text(
+                "INSERT INTO routing_steps (routing_id, sequence, operation_type, work_center_id) "
+                "VALUES (:routing, 10, 'POLISHING', :station)"
+            ),
+            {"routing": routing.id, "station": station.id},
+        )
+
+
+def test_d03_db_allows_only_one_active_routing_per_product(
+    db_session: Session, product_factory, work_center_factory, routing_factory
+) -> None:
+    product, station = product_factory(), work_center_factory()
+    routing_factory(product, [(10, "QC", station)], version=1, status="ACTIVE")
+    second = routing_factory(product, [(10, "QC", station)], version=2)
+    with pytest.raises(DBAPIError, match="active_flag"), db_session.begin():
+        db_session.execute(
+            text("UPDATE routings SET status = 'ACTIVE' WHERE id = :id"), {"id": second.id}
+        )

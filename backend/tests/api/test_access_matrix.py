@@ -53,6 +53,10 @@ ENDPOINT_ACCESS: dict[tuple[str, str], AccessRule] = {
     ("PUT", "/api/v1/boms/{bom_id}/items"): perm(Permission.BOM_WRITE),
     ("POST", "/api/v1/boms/{bom_id}/activate"): perm(Permission.BOM_WRITE),
     ("POST", "/api/v1/products/{product_id}/bom/explode"): perm(Permission.MASTER_READ),
+    ("GET", "/api/v1/products/{product_id}/routings"): perm(Permission.MASTER_READ),
+    ("POST", "/api/v1/products/{product_id}/routings"): perm(Permission.ROUTING_WRITE),
+    ("PUT", "/api/v1/routings/{routing_id}/steps"): perm(Permission.ROUTING_WRITE),
+    ("POST", "/api/v1/routings/{routing_id}/activate"): perm(Permission.ROUTING_WRITE),
 }
 
 
@@ -174,6 +178,16 @@ PROTECTED_CALLS: list[Call] = [
         "/api/v1/products/{product_id}/bom/explode",
         json=lambda n: {"quantity": n, "bom_header_id": 0},
     ),
+    Call("GET", "/api/v1/products/{product_id}/routings"),
+    Call("POST", "/api/v1/products/{product_id}/routings"),
+    Call(
+        "PUT",
+        "/api/v1/routings/{routing_id}/steps",
+        json=lambda n: {
+            "steps": [{"sequence": 10 * n, "operation_type": "QC", "work_center_id": 0}]
+        },
+    ),
+    Call("POST", "/api/v1/routings/{routing_id}/activate"),
 ]
 
 
@@ -185,11 +199,17 @@ def test_b4_protected_call_list_covers_every_protected_route() -> None:
 
 @pytest.fixture
 def targets(
-    user_factory, product_factory, material_factory, work_center_factory, bom_factory
+    user_factory,
+    product_factory,
+    material_factory,
+    work_center_factory,
+    bom_factory,
+    routing_factory,
 ) -> dict[str, int]:
     """One existing, unused row of each kind for the path parameters."""
     product = product_factory()
     component = material_factory()
+    station = work_center_factory()
     return {
         "user_id": user_factory(role=Role.WAREHOUSE).id,
         "product_id": product.id,
@@ -197,6 +217,8 @@ def targets(
         "work_center_id": work_center_factory().id,
         "bom_id": bom_factory(product, [(component, "2", "0")]).id,
         "component_id": component.id,
+        "routing_id": routing_factory(product, [(10, "QC", station)]).id,
+        "station_id": station.id,
     }
 
 
@@ -207,6 +229,9 @@ def _send(
     body = call.json(n) if call.json else None
     if body and "bom_header_id" in body:  # explode the target's own DRAFT version
         body = {**body, "bom_header_id": targets["bom_id"]}
+    if body and "steps" in body:  # routing steps need a real work center
+        steps = [{**step, "work_center_id": targets["station_id"]} for step in body["steps"]]
+        body = {"steps": steps}
     if body and "items" in body:  # BOM lines need a real material
         lines = [{**line, "material_id": targets["component_id"]} for line in body["items"]]
         body = {"items": lines}
