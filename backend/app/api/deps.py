@@ -12,6 +12,7 @@ from app.core.clock import Clock
 from app.core.config import Settings
 from app.domain.errors import AuthenticationError
 from app.domain.risk import RiskThresholds
+from app.services.audit_service import AuditService
 from app.services.auth_service import AuthenticatedUser, AuthService
 from app.services.bom_service import BomService
 from app.services.context import RequestContext
@@ -101,6 +102,10 @@ def get_routing_service(
     clock: Annotated[Clock, Depends(get_clock)],
 ) -> RoutingService:
     return RoutingService(session, clock)
+
+
+def get_audit_service(session: Annotated[Session, Depends(get_session)]) -> AuditService:
+    return AuditService(session)
 
 
 def get_inventory_service(session: Annotated[Session, Depends(get_session)]) -> InventoryService:

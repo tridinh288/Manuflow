@@ -1,6 +1,6 @@
 # Rà soát bảo mật theo B16 (Phase 7)
 
-Mỗi dòng của bảng B16 được đối chiếu với code và một test tự động. Đường dẫn test tính từ `backend/`. Ngày rà soát: 2026-10-01.
+Mỗi dòng của bảng B16 được đối chiếu với code và một test tự động. Đường dẫn test tính từ `backend/`. Ngày rà soát: 2026-10-01. Đính chính cùng ngày: bản đầu ghi test quyền "đọc bảng B4 từ đặc tả", thực ra lúc đó là bảng chép tay; nay đã thêm test đọc file đặc tả thật.
 
 ## Kết quả
 
@@ -8,7 +8,7 @@ Mỗi dòng của bảng B16 được đối chiếu với code và một test t
 | --- | --- | --- | --- |
 | Mật khẩu | Hash Argon2 (`core/security.py`), tối thiểu 10 ký tự (`domain/users.py`), không trả về, audit lọc khóa nhạy cảm | `tests/unit/test_security.py::test_b16_password_stored_as_argon2_hash`, `tests/unit/test_users_domain.py::test_b16_password_length_enforced`, `tests/api/test_users.py::test_br_aud_01_user_creation_is_audited_without_password`, `tests/integration/test_audit.py::test_br_aud_05_no_audit_row_contains_secrets_after_logins` | Đạt |
 | JWT | HS256, secret ≥ 32 byte, claim `sub/exp/iat/jti`, không có role trong token, hết hạn 30 phút, tải lại user mỗi request | `tests/unit/test_security.py::test_b16_token_has_required_claims_and_no_role`, `tests/api/test_auth.py::test_b16_token_expires_after_30_minutes`, `tests/api/test_auth.py::test_br_auth_04_deactivated_user_token_rejected_on_next_request`, `tests/unit/test_settings.py::test_b16_short_jwt_secret_rejected` | Đạt |
-| Phân quyền | Mỗi route khai báo đúng một quy tắc truy cập; phạm vi WORKER trong service, ngoài phạm vi trả 404 | `tests/api/test_access_matrix.py` (quét router + 4 vai trò × mọi endpoint), `tests/unit/test_permissions.py` (đọc bảng B4 từ đặc tả), `tests/api/test_order_reads.py::test_br_auth_03_order_outside_the_workers_scope_is_404_not_403` | Đạt |
+| Phân quyền | Mỗi route khai báo đúng một quy tắc truy cập; phạm vi WORKER trong service, ngoài phạm vi trả 404 | `tests/api/test_access_matrix.py` (quét router + 4 vai trò × mọi endpoint), `tests/unit/test_permissions.py` (bảng B4 chép tay, đối chiếu với bảng đọc từ file đặc tả), `tests/unit/test_spec_endpoints.py` (router khớp đúng bảng endpoint B13 đọc từ đặc tả), `tests/api/test_order_reads.py::test_br_auth_03_order_outside_the_workers_scope_is_404_not_403` | Đạt |
 | Input không tin cậy | Mọi model request có `extra="forbid"`; trạng thái, số lệnh, tiến độ, người thực hiện do server tính | `tests/unit/test_input_limits.py::test_b16_request_models_reject_unknown_fields` **(mới)**, `tests/api/test_production_orders.py::test_br_auth_01_client_cannot_set_status_or_number` | Đạt |
 | Validate | Số lượng là chuỗi thập phân khớp `DECIMAL(18,4)`, chuỗi có độ dài tối đa, mã khớp mẫu, ID và `offset` có cận trên | `tests/unit/test_input_limits.py::test_b16_every_request_field_has_an_explicit_limit` **(mới)**, `tests/api/test_security_inputs.py` **(mới)** | **Sửa trong PR này** (xem phát hiện 1, 2) |
 | SQL injection | Chỉ ORM và tham số ràng buộc; `ruff` bật nhóm `S` (gồm `S608`) | `pyproject.toml` (`select` có `"S"`), CI bước `ruff check` | Đạt |

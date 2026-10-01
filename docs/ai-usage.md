@@ -113,6 +113,15 @@ Mỗi mục ghi: AI đã viết gì, test hoặc review nào phát hiện, sửa
 - **Bài học:** với test sinh dữ liệu ngẫu nhiên, phải đo xem dữ liệu sinh ra thực sự đi tới những nhánh nào, và cần một bất biến cho từng bộ đếm, không chỉ cho tổng số dư.
 - **PR:** phase-7/inventory-property-test.
 
+### 15. Báo "MVP đã xong" trong khi còn thiếu một endpoint của đặc tả (Phase 7)
+
+- **AI làm:** sau khi merge Phase 7, AI báo MVP (Phase 1–7) đã đạt đủ Definition of Done. Thực tế `GET /audit-logs` (BR-AUD-06, bảng endpoint B13) chưa từng được viết.
+- **Vì sao lọt:** độ phủ quy tắc chỉ cần một test có tên chứa `br_aud_06`, và test về trigger append-only đã thỏa điều kiện đó. Test ma trận quyền so router với một danh sách endpoint chép tay trong test, không phải với đặc tả. `docs/security-review.md` còn ghi sai rằng test quyền "đọc bảng B4 từ đặc tả".
+- **Phát hiện:** khi lập kế hoạch trang Audit log cho Phase 8, AI liệt kê route thật và đối chiếu với bảng endpoint của đặc tả.
+- **Sửa:** viết endpoint (lọc theo entity, người thực hiện, hành động, khoảng thời gian, có phân trang) kèm 7 test và 6/6 mutant bị bắt. Thêm `test_b13_router_serves_exactly_the_spec_endpoint_table`, test **đọc bảng endpoint từ `requirements.md`** và so hai chiều với router: gỡ router audit thì test fail. Thêm test so bảng quyền chép tay với bảng B4 trong file đặc tả. Đính chính `security-review.md`.
+- **Bài học:** "mỗi quy tắc có một test" chưa đủ khi một quy tắc gồm nhiều ý; danh sách đối chiếu nên đọc từ nguồn sự thật, không chép tay. Trước khi báo "xong", phải liệt kê thứ thực sự đang chạy rồi so với đặc tả.
+- **PR:** phase-7/audit-log-endpoint.
+
 ## Rà soát đặc tả
 
 Ở bước rà soát (B20), AI tìm ra 10 điểm mâu thuẫn hoặc còn thiếu trong `docs/requirements.md`. Các điểm này được ghi lại cùng quyết định đã duyệt trong [`decisions.md`](decisions.md).
