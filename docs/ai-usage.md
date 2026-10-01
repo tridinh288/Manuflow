@@ -87,6 +87,14 @@ Mỗi mục ghi: AI đã viết gì, test hoặc review nào phát hiện, sửa
 - **Bài học:** ví dụ trong đặc tả là điểm khởi đầu; mỗi quy tắc cần ít nhất một test mà ở đó cài đặt sai cho kết quả **khác** cài đặt đúng.
 - **PR:** phase-6/progress-metrics-risk.
 
+### 12. Test cảnh báo vật tư bỏ sót biên và trường hợp rỗng (Phase 6)
+
+- **AI viết:** test cảnh báo vật tư chỉ có đơn dư rõ ràng (60 ≥ 40) và đơn thiếu rõ ràng. Test điểm nghẽn chỉ dùng lệnh AT_RISK.
+- **Phá code cho thấy ba cài đặt sai vẫn qua:** (a) `>` thay cho `>=` (đủ vừa khít thì không được gợi ý); (b) bỏ điều kiện "đơn có dòng vật tư", nên `all()` trên danh sách rỗng gợi ý một đơn không có gì để kiểm; (c) chỉ đếm AT_RISK, bỏ OVERDUE khi tính điểm nghẽn.
+- **Sửa:** thêm đơn có tồn vừa đúng bằng nhu cầu, đơn không có dòng vật tư, và cho một trong hai lệnh ở trạm hàn quá hạn. Phá lại: 13/13 mutant fail.
+- **Bài học:** mỗi phép so sánh cần một test ngay tại biên, và mỗi `all()` cần một test với danh sách rỗng.
+- **PR:** phase-6/bottlenecks-alerts-dashboard.
+
 ## Rà soát đặc tả
 
 Ở bước rà soát (B20), AI tìm ra 10 điểm mâu thuẫn hoặc còn thiếu trong `docs/requirements.md`. Các điểm này được ghi lại cùng quyết định đã duyệt trong [`decisions.md`](decisions.md).

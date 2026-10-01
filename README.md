@@ -2,13 +2,13 @@
 
 This project is a student/personal simulation of an internal manufacturing management system. It models common workflows such as BOM management, material planning, inventory reservation, production planning, and workshop progress tracking. It is not a production ERP, and the author does not claim professional manufacturing experience.
 
-> Status: **Phase 6 — progress and monitoring** (in progress). Done: Phases 1–5
+> Status: **Phase 6 — progress and monitoring** (done, awaiting review). Done: Phases 1–5
 > (foundation; authentication, permissions, audit and idempotency; master data, BOMs and
 > routings; inventory ledger; production orders with reservation, issue, start and
-> cancel). Phase 6 so far: progress reports per operation with scrap, corrections,
-> cascading completion and automatic order completion; progress figures per operation
-> and order, and order risk on `GET /dashboard/risks` (overdue, material shortage, not
-> started yet due soon, behind schedule).
+> cancel). Phase 6: progress reports per operation with scrap, corrections, cascading
+> completion and automatic order completion; progress figures per operation and order;
+> the dashboard (`GET /dashboard/risks`, `/production`, `/bottlenecks`,
+> `/material-alerts`).
 
 ## Quick start
 
@@ -84,6 +84,19 @@ backend/
 docker/mysql/init/  creates databases and least-privilege DB users
 docs/               requirements, decisions, AI usage log
 ```
+
+## Known limitations
+
+- **Bottlenecks are not capacity planning.** There is no capacity or shift data, so
+  `/dashboard/bottlenecks` shows where unfinished units and at-risk orders pile up, not
+  how loaded the machines really are.
+- **A completed operation cannot be corrected** (C-10). Once an operation is COMPLETED,
+  progress reports on it are rejected; a wrong count has to be explained outside the
+  system.
+- **Material alerts are suggestions.** A MATERIAL_SHORTAGE order listed as a re-check
+  candidate stays in that state until someone runs `check-materials` (D-09).
+- Dashboard figures are computed on request with no cache; fine for the size of a small
+  shop, not for thousands of open orders.
 
 ## AI-assisted development
 
