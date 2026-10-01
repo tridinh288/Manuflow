@@ -15,6 +15,7 @@ from app.services.context import RequestContext
 from app.services.inventory_service import InventoryService
 from app.services.master_data_service import MaterialService, ProductService, WorkCenterService
 from app.services.production_service import ProductionOrderService
+from app.services.progress_service import ProgressService
 from app.services.routing_service import RoutingService
 from app.services.user_service import UserService
 
@@ -106,3 +107,10 @@ def get_production_order_service(
     clock: Annotated[Clock, Depends(get_clock)],
 ) -> ProductionOrderService:
     return ProductionOrderService(session, clock)
+
+
+def get_progress_service(
+    session: Annotated[Session, Depends(get_session)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> ProgressService:
+    return ProgressService(session, clock)

@@ -147,3 +147,26 @@ class ProductionOperation(Base):
     rejected_quantity: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     started_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+class OperationProgressLog(Base):
+    """One progress report or correction (BR-OP-06, D-15). Append-only (DB triggers)."""
+
+    __tablename__ = "operation_progress_logs"
+    __table_args__ = (
+        Index("ix_operation_progress_logs_operation_id_created_at", "operation_id", "created_at"),
+        CheckConstraint("good_delta <> 0 OR rejected_delta <> 0", name="reports_something"),
+        MYSQL_TABLE_OPTIONS,
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    operation_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("production_operations.id"))
+    good_delta: Mapped[int] = mapped_column(Integer)
+    rejected_delta: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str | None] = mapped_column(String(500))
+    reported_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
+    idem_key: Mapped[str | None] = mapped_column(String(128))
+    request_id: Mapped[str | None] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=text("CURRENT_TIMESTAMP(6)")
+    )

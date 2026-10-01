@@ -8,6 +8,7 @@ from app.api.v1 import (
     bom,
     inventory,
     materials,
+    operations,
     production_orders,
     products,
     routing,
@@ -25,6 +26,7 @@ FEATURE_ROUTERS = (
     routing,
     inventory,
     production_orders,
+    operations,
     admin,
 )
 

@@ -7,6 +7,7 @@ from app.domain.order_state import OPEN_STATUSES
 from app.models.master_data import Material, Product
 from app.models.production import (
     DocumentSequence,
+    OperationProgressLog,
     ProductionOperation,
     ProductionOrder,
     ProductionOrderMaterial,
@@ -191,3 +192,23 @@ class ProductionOrderRepository:
             .order_by(ProductionOperation.sequence)
         ).all()
         return [(operation, center) for operation, center in rows]
+
+    def get_operation(self, operation_id: int) -> ProductionOperation | None:
+        return self._session.get(ProductionOperation, operation_id, populate_existing=True)
+
+    def lock_operations(self, order_id: int) -> list[ProductionOperation]:
+        """BR-OP-07: after the order row, every operation of the order by sequence."""
+        return list(
+            self._session.scalars(
+                select(ProductionOperation)
+                .where(ProductionOperation.production_order_id == order_id)
+                .order_by(ProductionOperation.sequence)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        )
+
+    def add_progress_log(self, log: OperationProgressLog) -> OperationProgressLog:
+        self._session.add(log)
+        self._session.flush()
+        return log

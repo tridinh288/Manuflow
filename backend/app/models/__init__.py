@@ -7,6 +7,7 @@ from app.models.inventory_transaction import InventoryTransaction
 from app.models.master_data import Inventory, Material, Product
 from app.models.production import (
     DocumentSequence,
+    OperationProgressLog,
     ProductionOperation,
     ProductionOrder,
     ProductionOrderMaterial,
@@ -25,6 +26,7 @@ __all__ = [
     "Inventory",
     "InventoryTransaction",
     "Material",
+    "OperationProgressLog",
     "Product",
     "ProductionOperation",
     "ProductionOrder",
