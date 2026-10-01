@@ -41,7 +41,9 @@ class InventoryTransaction(Base):
     production_order_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("production_orders.id")
     )
-    order_material_id: Mapped[int | None] = mapped_column(BigInteger)
+    order_material_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("production_order_materials.id")
+    )
     reference: Mapped[str | None] = mapped_column(String(64))
     reason: Mapped[str | None] = mapped_column(String(500))
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))

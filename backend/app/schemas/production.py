@@ -6,7 +6,8 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validato
 
 from app.core.permissions import Permission
 from app.domain.order_state import OrderStatus, allowed_actions
-from app.services.production_service import OrderView
+from app.domain.quantities import format_quantity
+from app.services.production_service import MaterialCheck, OrderView, ReservationResult
 
 
 class OrderCreateRequest(BaseModel):
@@ -81,4 +82,49 @@ class OrderResponse(BaseModel):
             completed_at=order.completed_at,
             created_at=order.created_at,
             allowed_actions=allowed_actions(status, permissions),
+        )
+
+
+class MaterialCheckResponse(BaseModel):
+    """BR-INV-05: every material with required, available (before reserving), shortage."""
+
+    material_id: int
+    material_code: str
+    unit: str
+    required: str
+    available: str
+    shortage: str
+
+    @classmethod
+    def of(cls, check: MaterialCheck) -> "MaterialCheckResponse":
+        places = check.decimal_places
+        return cls(
+            material_id=check.material_id,
+            material_code=check.material_code,
+            unit=check.unit,
+            required=format_quantity(check.required, places),
+            available=format_quantity(check.available, places),
+            shortage=format_quantity(check.shortage, places),
+        )
+
+
+class ReservationResponse(OrderResponse):
+    """plan / check-materials: the order after the action plus the material check.
+
+    Shortage is a successful outcome, not an error: the order is saved in
+    MATERIAL_SHORTAGE (B7), so the response is 200 with ``reserved: false``.
+    """
+
+    reserved: bool
+    material_check: list[MaterialCheckResponse]
+
+    @classmethod
+    def of_result(
+        cls, result: ReservationResult, permissions: Iterable[Permission]
+    ) -> "ReservationResponse":
+        order = OrderResponse.of(result.view, permissions)
+        return cls(
+            **order.model_dump(),
+            reserved=all(check.shortage == 0 for check in result.checks),
+            material_check=[MaterialCheckResponse.of(check) for check in result.checks],
         )
