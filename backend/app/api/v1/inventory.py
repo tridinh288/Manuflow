@@ -15,6 +15,8 @@ from app.schemas.inventory import (
     AdjustmentRequest,
     BalanceResponse,
     MovementResponse,
+    OrderMovementRequest,
+    OrderMovementResponse,
     ReceiptRequest,
     TransactionResponse,
     to_decimal,
@@ -28,6 +30,8 @@ router = APIRouter(prefix="/inventory", tags=["inventory"])
 Reader = Annotated[AuthenticatedUser, Depends(require(Permission.INVENTORY_READ))]
 Receiver = Annotated[AuthenticatedUser, Depends(require(Permission.INVENTORY_RECEIVE))]
 Adjuster = Annotated[AuthenticatedUser, Depends(require(Permission.INVENTORY_ADJUST))]
+Issuer = Annotated[AuthenticatedUser, Depends(require(Permission.INVENTORY_ISSUE))]
+Returner = Annotated[AuthenticatedUser, Depends(require(Permission.INVENTORY_RETURN))]
 Service = Annotated[InventoryService, Depends(get_inventory_service)]
 Context = Annotated[RequestContext, Depends(get_request_context)]
 
@@ -107,5 +111,45 @@ def adjust_stock(
         payload=body,
         operation=lambda: service.adjust(body.material_id, delta, body.reason, user.actor, context),
         to_response=MovementResponse.of,
+        status_code=status.HTTP_201_CREATED,
+    )
+
+
+@router.post("/issues", status_code=status.HTTP_201_CREATED, response_model=OrderMovementResponse)
+def issue_stock(
+    body: OrderMovementRequest,
+    user: Issuer,
+    service: Service,
+    context: Context,
+    idempotent: RequiredIdempotency,
+) -> JSONResponse:
+    """ISSUE (D-10): consume what is reserved for an order line; key required (D-22)."""
+    quantity = to_decimal(body.quantity)
+    return idempotent.respond(
+        user=user,
+        payload=body,
+        operation=lambda: service.issue(body.order_material_id, quantity, user.actor, context),
+        to_response=OrderMovementResponse.of_order,
+        status_code=status.HTTP_201_CREATED,
+    )
+
+
+@router.post("/returns", status_code=status.HTTP_201_CREATED, response_model=OrderMovementResponse)
+def return_stock(
+    body: OrderMovementRequest,
+    user: Returner,
+    service: Service,
+    context: Context,
+    idempotent: RequiredIdempotency,
+) -> JSONResponse:
+    """RETURN (C-05): issued material back to stock after cancel or completion."""
+    quantity = to_decimal(body.quantity)
+    return idempotent.respond(
+        user=user,
+        payload=body,
+        operation=lambda: service.return_stock(
+            body.order_material_id, quantity, user.actor, context
+        ),
+        to_response=OrderMovementResponse.of_order,
         status_code=status.HTTP_201_CREATED,
     )

@@ -70,6 +70,13 @@ Mỗi mục ghi: AI đã viết gì, test hoặc review nào phát hiện, sửa
 - **Sửa:** chuẩn hóa `astimezone(UTC)` ngay trong service, cả khi tạo lẫn khi sửa. Cố tình bỏ chuẩn hóa → test fail.
 - **PR:** phase-5/orders-state-machine.
 
+### 10. Commit và push dù lint đang fail (Phase 5, quy trình)
+
+- **AI làm:** chạy cổng kiểm tra bằng `docker compose exec … | tail -2 && git commit …`. Ruff báo `Found 1 error` (một dòng quá dài), nhưng mã thoát của chuỗi lệnh là của `tail`, nên commit `81cedab` vẫn được tạo và push. Điều này vi phạm quy tắc "không commit khi lint fail".
+- **Phát hiện bởi:** AI đọc output và thấy `Found 1 error` ngay trên dòng commit.
+- **Sửa:** không viết lại lịch sử đã push. Thêm commit sửa định dạng ngay sau đó, chạy lại mọi cổng kiểm tra với mã thoát thật (791 passed, exit 0) trước khi mở PR. Skill `git-pr-workflow` (B1) được bổ sung: không nối cổng kiểm tra qua pipe trước `&&`.
+- **PR:** phase-5/issue-and-return.
+
 ## Rà soát đặc tả
 
 Ở bước rà soát (B20), AI tìm ra 10 điểm mâu thuẫn hoặc còn thiếu trong `docs/requirements.md`. Các điểm này được ghi lại cùng quyết định đã duyệt trong [`decisions.md`](decisions.md).

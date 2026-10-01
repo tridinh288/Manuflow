@@ -98,3 +98,23 @@ def transition(status: OrderStatus, action: OrderAction, target: OrderStatus) ->
     if target not in TRANSITIONS[(status, action)]:
         raise ValueError(f"{action.value} cannot lead from {status.value} to {target.value}")
     return target
+
+
+# C-05: which order statuses allow stock to move against the order's material lines.
+ISSUE_STATUSES = frozenset({S.READY_TO_PRODUCE})
+RETURN_STATUSES = frozenset({S.CANCELLED, S.COMPLETED})
+
+
+def ensure_stock_movement_allowed(status: OrderStatus, movement: str) -> None:
+    allowed = ISSUE_STATUSES if movement == "ISSUE" else RETURN_STATUSES
+    if status not in allowed:
+        raise ConflictError(
+            "INVALID_ORDER_STATUS",
+            f"{movement} is not allowed while the order is {status.value}.",
+            [
+                {
+                    "current_status": status.value,
+                    "allowed_statuses": sorted(s.value for s in allowed),
+                }
+            ],
+        )

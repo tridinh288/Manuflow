@@ -33,7 +33,7 @@ Nếu đang ở `main` mà đã lỡ sửa code: `git switch -c phase-<n>/<slug>
 
 1. Chạy test liên quan đến phần việc bằng lệnh thật của dự án (ví dụ `docker compose exec api pytest tests/unit tests/integration -q`). Ghi lại **nguyên văn** dòng kết quả cuối (số passed/failed).
 2. Chạy `ruff check` và `mypy` nếu dự án đã cấu hình.
-3. Có test fail hoặc lỗi lint: **không commit**. Sửa trong phạm vi phần việc; nếu không sửa được, dừng và báo lại kèm lỗi.
+3. Có test fail hoặc lỗi lint: **không commit**. Không bao giờ nối cổng kiểm tra vào lệnh commit qua pipe (`… | tail && git commit`): mã thoát khi đó là của `tail`, nên commit vẫn chạy dù lint hoặc test fail. Kiểm tra mã thoát thật trước. Sửa trong phạm vi phần việc; nếu không sửa được, dừng và báo lại kèm lỗi.
 
 ### B2. Kiểm tra những gì sắp commit
 

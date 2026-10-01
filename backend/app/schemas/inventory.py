@@ -9,7 +9,11 @@ from app.domain.quantities import format_quantity
 from app.models.inventory_transaction import InventoryTransaction
 from app.models.master_data import Inventory, Material
 from app.repositories.inventory_repository import LedgerTotals
-from app.services.inventory_service import MovementResult, Reconciliation
+from app.services.inventory_service import (
+    MovementResult,
+    OrderMovementResult,
+    Reconciliation,
+)
 
 # B13: quantities are strings; the per-material scale is checked by the domain (B6).
 QuantityString = Annotated[str, StringConstraints(pattern=r"^\d{1,14}(\.\d{1,4})?$", strict=True)]
@@ -186,4 +190,38 @@ class ReconciliationResponse(BaseModel):
             consistent=not result.mismatches,
             checked_materials=result.checked,
             mismatches=[MismatchResponse.of(m) for m in result.mismatches],
+        )
+
+
+class OrderMovementRequest(BaseModel):
+    """ISSUE / RETURN against one material line of a production order (D-10)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    order_material_id: int = Field(gt=0)
+    quantity: QuantityString
+
+
+class OrderMovementResponse(MovementResponse):
+    production_order_id: int
+    order_number: str
+    order_material_id: int
+    line_required_quantity: str
+    line_reserved_quantity: str
+    line_issued_quantity: str
+    line_returned_quantity: str
+
+    @classmethod
+    def of_order(cls, result: OrderMovementResult) -> "OrderMovementResponse":
+        places = result.material.decimal_places
+        line = result.order_line
+        return cls(
+            **MovementResponse.of(result).model_dump(),
+            production_order_id=result.order.id,
+            order_number=result.order.order_number,
+            order_material_id=line.id,
+            line_required_quantity=format_quantity(line.required_quantity, places),
+            line_reserved_quantity=format_quantity(line.reserved_quantity, places),
+            line_issued_quantity=format_quantity(line.issued_quantity, places),
+            line_returned_quantity=format_quantity(line.returned_quantity, places),
         )
