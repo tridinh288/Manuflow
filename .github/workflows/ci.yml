@@ -33,6 +33,11 @@ jobs:
       - run: mypy
       - name: pip-audit (B16)
         run: pip-audit --skip-editable
+      # B15/B18: every rule of Phases 1-7 has a test. BR-AI belongs to Phase 9 (extension).
+      - name: Rule-test coverage (B15)
+        run: >-
+          python scripts/rule_coverage.py --require BR-AUTH --require BR-AUD --require BR-MD
+          --require BR-BOM --require BR-RT --require BR-INV --require BR-PO --require BR-OP
 
   test:
     name: Tests on MySQL 8.0

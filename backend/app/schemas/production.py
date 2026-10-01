@@ -16,6 +16,7 @@ from app.domain.order_state import OrderStatus, allowed_actions
 from app.domain.quantities import format_quantity
 from app.models.master_data import Material
 from app.models.production import ProductionOrderMaterial
+from app.schemas.common import MAX_ID
 from app.schemas.dashboard import ratio
 from app.services.production_service import (
     MaterialCheck,
@@ -30,7 +31,7 @@ class OrderCreateRequest(BaseModel):
     # BR-AUTH-01: status, order_number, created_by... are rejected, never trusted.
     model_config = ConfigDict(extra="forbid")
 
-    product_id: int = Field(gt=0)
+    product_id: int = Field(gt=0, le=MAX_ID)
     # D-06 is checked by the domain so 0, -1, 1.5, "10" and true all get INVALID_QUANTITY.
     planned_quantity: Any
     due_date: AwareDatetime  # D-23: stored in UTC
