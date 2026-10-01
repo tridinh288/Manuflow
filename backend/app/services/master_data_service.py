@@ -24,6 +24,7 @@ from app.repositories.master_data_repository import (
     ProductRepository,
     WorkCenterRepository,
 )
+from app.repositories.production_repository import ProductionOrderRepository
 from app.repositories.routing_repository import RoutingRepository
 from app.services.audit_service import AuditService
 from app.services.context import Actor, RequestContext
@@ -196,10 +197,11 @@ class ProductService(_MasterDataService):
         return product
 
     def deactivate(self, product_id: int, actor: Actor, context: RequestContext) -> None:
-        """D-19 as refined by C-13: blocked only by open production orders (Phase 5).
+        """D-19 as refined by C-13: blocked only by open production orders.
 
         The product's BOM and routing versions stay; an inactive product cannot be
-        exploded, planned or ordered (BR-MD-04).
+        exploded, planned or ordered (BR-MD-04). Order creation share-locks the product
+        row, so an order cannot be created while the product is being deactivated.
         """
         with transaction(self._session):
             product = self._products.get_for_update(product_id)
@@ -207,6 +209,13 @@ class ProductService(_MasterDataService):
                 raise self._not_found()
             if not product.active:
                 return
+            open_orders = ProductionOrderRepository(self._session).open_order_numbers(product.id)
+            if open_orders:
+                raise ConflictError(
+                    "PRODUCT_IN_USE",
+                    "The product has open production orders.",
+                    [{"order_numbers": open_orders}],
+                )
             product.active = False
             self._session.flush()
             self._record(

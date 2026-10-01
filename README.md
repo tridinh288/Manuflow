@@ -2,12 +2,11 @@
 
 This project is a student/personal simulation of an internal manufacturing management system. It models common workflows such as BOM management, material planning, inventory reservation, production planning, and workshop progress tracking. It is not a production ERP, and the author does not claim professional manufacturing experience.
 
-> Status: **Phase 4 — inventory ledger** (complete, pending review). Done: Phases 1–3
-> (foundation; authentication, permissions, audit and idempotency; master data, versioned
-> BOMs and routings, BOM explosion) and Phase 4: an append-only inventory ledger,
-> idempotent receipts and signed adjustments (`Idempotency-Key` required, deadlock retry),
-> balances with a low-stock filter, the ledger listing and a reconciliation report that
-> checks every balance against the sum of its ledger lines.
+> Status: **Phase 5 — production orders** (in progress). Done: Phases 1–4 (foundation;
+> authentication, permissions, audit and idempotency; master data, versioned BOMs and
+> routings, BOM explosion; inventory ledger with receipts, adjustments and reconciliation).
+> Phase 5 so far: the order state machine, numbered orders (`PO-YYYY-NNNNN`) and DRAFT
+> updates, with `allowed_actions` computed per user.
 
 ## Quick start
 

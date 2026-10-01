@@ -31,3 +31,5 @@ Mã `C-xx` được dùng để không trùng với `D-xx`. Khi chủ dự án c
 - Bảng `inventory` được tạo ở Phase 3 (không đợi Phase 4) để mỗi vật tư có dòng tồn kho bằng 0 ngay khi được tạo (BR-INV-01).
 - C-07 hoàn tất ở Phase 3: work center bị chặn vô hiệu hóa khi còn WORKER active hoặc nằm trong routing ACTIVE. Gán WORKER và kích hoạt routing đều khóa dòng work center.
 - C-15 được chủ dự án duyệt ngày 2026-10-01. Thứ tự khóa của mọi biến động kho: key idempotency → khóa đọc chung trên dòng vật tư → khóa ghi trên dòng tồn kho. Vô hiệu hóa vật tư và kích hoạt BOM chỉ khóa dòng vật tư, nên không tạo vòng chờ.
+- C-13 hoàn tất ở Phase 5: sản phẩm còn lệnh mở (mọi trạng thái trừ COMPLETED/CANCELLED) không vô hiệu hóa được. Tạo lệnh khóa đọc chung trên dòng sản phẩm.
+- D-21: bộ đếm theo năm được tạo bằng `INSERT … ON DUPLICATE KEY UPDATE` rồi `SELECT … FOR UPDATE`, nên lệnh đầu tiên của năm cũng không bị trùng số; năm lấy theo đồng hồ UTC. Thứ tự khóa khi tạo lệnh: key idempotency → `document_sequences` → sản phẩm (đọc chung) → `production_orders`.

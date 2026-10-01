@@ -14,7 +14,7 @@ class InventoryTransaction(Base):
     """The inventory ledger (BR-INV-03): one line per material per balance change.
 
     Append-only: DB triggers reject every UPDATE and DELETE. ``production_order_id`` and
-    ``order_material_id`` get their foreign keys when production orders exist (Phase 5).
+    ``order_material_id`` gets its foreign key with production order materials.
     """
 
     __tablename__ = "inventory_transactions"
@@ -38,7 +38,9 @@ class InventoryTransaction(Base):
     reserved_delta: Mapped[Decimal] = mapped_column(Numeric(18, 4))
     on_hand_after: Mapped[Decimal] = mapped_column(Numeric(18, 4))
     reserved_after: Mapped[Decimal] = mapped_column(Numeric(18, 4))
-    production_order_id: Mapped[int | None] = mapped_column(BigInteger)
+    production_order_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("production_orders.id")
+    )
     order_material_id: Mapped[int | None] = mapped_column(BigInteger)
     reference: Mapped[str | None] = mapped_column(String(64))
     reason: Mapped[str | None] = mapped_column(String(500))

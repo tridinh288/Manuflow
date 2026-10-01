@@ -63,6 +63,8 @@ ENDPOINT_ACCESS: dict[tuple[str, str], AccessRule] = {
     ("GET", "/api/v1/inventory"): perm(Permission.INVENTORY_READ),
     ("GET", "/api/v1/inventory/transactions"): perm(Permission.INVENTORY_READ),
     ("GET", "/api/v1/admin/inventory-reconciliation"): perm(Permission.AUDIT_READ),
+    ("POST", "/api/v1/production-orders"): perm(Permission.ORDER_CREATE),
+    ("PATCH", "/api/v1/production-orders/{order_id}"): perm(Permission.ORDER_CREATE),
 }
 
 
@@ -210,6 +212,16 @@ PROTECTED_CALLS: list[Call] = [
     Call("GET", "/api/v1/inventory"),
     Call("GET", "/api/v1/inventory/transactions"),
     Call("GET", "/api/v1/admin/inventory-reconciliation"),
+    Call(
+        "POST",
+        "/api/v1/production-orders",
+        json=lambda n: {
+            "product_id": 0,
+            "planned_quantity": 10 * n,
+            "due_date": "2030-01-01T00:00:00Z",
+        },
+    ),
+    Call("PATCH", "/api/v1/production-orders/{order_id}", json=lambda n: {"notes": f"n{n}"}),
 ]
 
 
@@ -227,6 +239,7 @@ def targets(
     work_center_factory,
     bom_factory,
     routing_factory,
+    order_factory,
 ) -> dict[str, int]:
     """One existing, unused row of each kind for the path parameters."""
     product = product_factory()
@@ -240,6 +253,8 @@ def targets(
         "bom_id": bom_factory(product, [(component, "2", "0")]).id,
         "component_id": component.id,
         "routing_id": routing_factory(product, [(10, "QC", station)]).id,
+        # Its own product: an open order blocks deactivating the target product (C-13).
+        "order_id": order_factory(product_factory()).id,
         "station_id": station.id,
     }
 
@@ -251,6 +266,8 @@ def _send(
     body = call.json(n) if call.json else None
     if body and "bom_header_id" in body:  # explode the target's own DRAFT version
         body = {**body, "bom_header_id": targets["bom_id"]}
+    if body and body.get("product_id") == 0:  # a real, active product
+        body = {**body, "product_id": targets["product_id"]}
     if body and body.get("material_id") == 0:  # a real, active material
         body = {**body, "material_id": targets["material_id"]}
     if call.idempotency_key:
