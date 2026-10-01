@@ -5,6 +5,7 @@ row (exclusive), changes the balance, writes exactly one ledger line with the ba
 after the change, and writes the audit row.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -18,7 +19,11 @@ from app.domain.inventory import Balance, Movement, TransactionType
 from app.domain.quantities import format_quantity
 from app.models.inventory_transaction import InventoryTransaction
 from app.models.master_data import Inventory, Material
-from app.repositories.inventory_repository import InventoryRepository
+from app.repositories.inventory_repository import (
+    InventoryRepository,
+    LedgerTotals,
+    TransactionFilter,
+)
 from app.services.audit_service import AuditService
 from app.services.context import Actor, RequestContext
 
@@ -30,11 +35,53 @@ class MovementResult:
     balance: Balance
 
 
+@dataclass(frozen=True)
+class Reconciliation:
+    """BR-INV-04 result: every balance row checked against its ledger."""
+
+    checked: int
+    mismatches: list[LedgerTotals]
+
+
 class InventoryService:
     def __init__(self, session: Session) -> None:
         self._session = session
         self._inventory = InventoryRepository(session)
         self._audit = AuditService(session)
+
+    # --- Reads ---------------------------------------------------------------------------
+
+    def list_balances(
+        self, limit: int, offset: int, low_stock: bool
+    ) -> tuple[Sequence[tuple[Inventory, Material]], int]:
+        with transaction(self._session):
+            return self._inventory.list_balances(limit, offset, low_stock)
+
+    def list_transactions(
+        self, filters: TransactionFilter, limit: int, offset: int
+    ) -> tuple[Sequence[tuple[InventoryTransaction, Material]], int]:
+        if (
+            filters.created_from is not None
+            and filters.created_to is not None
+            and filters.created_from >= filters.created_to
+        ):
+            raise BusinessValidationError(
+                "INVALID_DATE_RANGE", "created_from must be earlier than created_to."
+            )
+        with transaction(self._session):
+            return self._inventory.list_transactions(filters, limit, offset)
+
+    def reconcile(self) -> Reconciliation:
+        """BR-INV-04: SUM(on_hand_delta) = on_hand and SUM(reserved_delta) = reserved for
+        every material; any difference means the balance and its ledger disagree."""
+        with transaction(self._session):
+            totals = self._inventory.ledger_totals()
+        mismatches = [
+            t for t in totals if t.on_hand != t.on_hand_ledger or t.reserved != t.reserved_ledger
+        ]
+        return Reconciliation(checked=len(totals), mismatches=mismatches)
+
+    # --- Movements -----------------------------------------------------------------------
 
     def receive(
         self,

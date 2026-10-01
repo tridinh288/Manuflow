@@ -1,8 +1,9 @@
 """Business rule -> test traceability report (B15).
 
 Lists every ``BR-xx`` code defined in docs/requirements.md and the tests whose name
-cites it (``BR-AUTH-05`` <-> ``test_br_auth_05_...``). With ``--require PREFIX`` it exits
-non-zero when a rule under that prefix has no test; the list must be empty for every
+cites it (``BR-AUTH-05`` <-> ``test_br_auth_05_...``). With ``--require PREFIX`` (a prefix such
+as ``BR-AUTH`` or one rule such as ``BR-INV-04``) it exits non-zero when a matching rule
+has no test; the list must be empty for every
 completed phase.
 
     python scripts/rule_coverage.py
@@ -51,7 +52,8 @@ def missing_rules(prefixes: list[str]) -> list[str]:
     return [
         rule
         for rule in defined_rules(find_spec())
-        if any(rule.startswith(f"{prefix}-") for prefix in prefixes) and rule not in covered
+        if any(rule == prefix or rule.startswith(f"{prefix}-") for prefix in prefixes)
+        and rule not in covered
     ]
 
 
