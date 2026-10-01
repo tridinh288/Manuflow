@@ -54,8 +54,10 @@ class OrderArgs(_Args):
     order_number: OrderNumber = Field(description="Production order number, e.g. PO-2026-00007")
 
 
-class NoArgs(_Args):
-    pass
+class NoArgs(BaseModel):
+    """Tools without parameters ignore whatever a model passes: there is nothing to misuse."""
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class MaterialRequirements(BaseModel):
@@ -104,7 +106,7 @@ class ToolContext:
 class Tool:
     name: str
     description: str
-    args: type[_Args]
+    args: type[BaseModel]
     permissions: tuple[Permission, ...]
     run: Callable[[ToolContext, Any], BaseModel]
 
@@ -227,7 +229,9 @@ TOOLS: dict[str, Tool] = {
     for tool in (
         Tool(
             "calculate_material_requirements",
-            "Material needs for N units of a product from its ACTIVE BOM, rounded up per material.",
+            "Material NEEDS for N units of a product from its ACTIVE BOM, rounded up per "
+            "material. Does not look at stock: for 'is there enough' or 'what is short' use "
+            "check_material_availability.",
             ProductQuantityArgs,
             (Permission.MASTER_READ,),
             calculate_material_requirements,
@@ -235,7 +239,8 @@ TOOLS: dict[str, Tool] = {
         Tool(
             "check_material_availability",
             "Whether today's available stock covers N units of a product (all-or-nothing), "
-            "with required, available and shortage per material. Reserves nothing.",
+            "with required, available and shortage per material: use it for 'can we make', "
+            "'is there enough' and 'what is short'. Reserves nothing.",
             ProductQuantityArgs,
             (Permission.MASTER_READ, Permission.INVENTORY_READ),
             check_material_availability,

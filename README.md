@@ -136,7 +136,9 @@ call demo.manager GET /production-orders/7 | jq '{status, completed_quantity}'  
 Ask questions such as "Tuần này có làm được 150 FRAME-A không?" or "Lệnh nào đang trễ và vì
 sao?" with `POST /api/v1/assistant/ask`. Set `ASSISTANT_API_KEY` (and optionally
 `ASSISTANT_MODEL`) in `.env` to switch it on; without a key it answers 503 and nothing
-else changes.
+else changes. **Free, local option:** install [Ollama](https://ollama.com), run
+`ollama pull qwen2.5:7b`, and set `ASSISTANT_PROVIDER=ollama`, `ASSISTANT_MODEL=qwen2.5:7b`
+(the API reaches the host at `http://host.docker.internal:11434/v1`); no key is needed.
 
 - Six **read-only** tools (BR-AI-01): material requirements, a what-if of the
   all-or-nothing reservation, order status, order risks, bottlenecks, low stock. There is
@@ -149,7 +151,8 @@ else changes.
   `ungrounded_numbers` with `grounded: false`.
 - `app/assistant/eval_questions.json` holds 20 evaluation questions with the tools and
   facts expected (BR-AI-05); a test checks those facts against the seeded data, and
-  `python -m app.assistant.evaluate` runs them against the real model.
+  `python -m app.assistant.evaluate` runs them against the real model. Latest result with
+  the free local `qwen2.5:7b`: **19/20** ([`docs/assistant-eval.md`](docs/assistant-eval.md)).
 
 ## Key design decisions
 

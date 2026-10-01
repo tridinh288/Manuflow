@@ -222,3 +222,41 @@ def test_assistant_is_off_without_a_key_and_stops_after_max_steps(
     body = ask(app, db_client, "demo.manager", looping)
     assert len(body["tool_calls"]) == settings.assistant_max_steps
     assert body["answer"]
+
+
+def test_an_empty_final_turn_gets_one_nudge_and_counts_as_a_step(
+    app: FastAPI, db_client: TestClient, seeded: dict[str, int]
+) -> None:
+    model = ScriptedChatModel(
+        say(""), say("Hãy dùng trang Tồn kho (POST /api/v1/inventory/receipts).")
+    )
+    body = ask(app, db_client, "demo.warehouse", model, "Nhập thêm 200 kg thép giúp tôi.")
+    assert body["answer"].startswith("Hãy dùng trang Tồn kho")
+    nudge = model.calls[1]["messages"][-1]
+    assert nudge["role"] == "user" and "trả lời" in nudge["content"]
+
+
+def test_a_model_that_fails_or_times_out_is_a_503_not_a_500(
+    app: FastAPI, db_client: TestClient, seeded: dict[str, int]
+) -> None:
+    def timeout(_: object) -> Any:
+        raise TimeoutError("read timed out after 120 s")
+
+    app.state.chat_model = ScriptedChatModel(timeout)
+    response = db_client.post(
+        "/api/v1/assistant/ask", json={"question": "?"}, headers=headers(db_client, "demo.manager")
+    )
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "ASSISTANT_UNAVAILABLE"
+    assert "timed out" not in response.text  # no internals
+
+
+def test_tools_without_parameters_ignore_stray_arguments(
+    app: FastAPI, db_client: TestClient, seeded: dict[str, int]
+) -> None:
+    model = ScriptedChatModel(
+        use_tool("get_low_stock_materials", material_code="STEEL-001"), say("Xong.")
+    )
+    run = ask(app, db_client, "demo.warehouse", model)["tool_calls"][0]
+    assert run["ok"] is True
+    assert {m["material_code"] for m in run["result"]["materials"]} == {"STEEL-001", "BOLT-M8"}

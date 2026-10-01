@@ -1,6 +1,6 @@
 """BR-AI-05: run the 20 evaluation questions against the real model before a demo.
 
-    # on a freshly seeded database, with ASSISTANT_API_KEY set
+    # on a freshly seeded database, with ASSISTANT_API_KEY set or ASSISTANT_PROVIDER=ollama
     docker compose exec -T api python -m app.assistant.evaluate > docs/assistant-eval.md
 
 Each question passes when the assistant called the expected tools, its answer contains
@@ -17,10 +17,11 @@ from typing import Any
 
 from sqlalchemy import select
 
-from app.assistant.model import AnthropicChatModel
+from app.assistant.model import build_chat_model
 from app.core.clock import SystemClock
 from app.core.config import get_settings
 from app.db.session import build_engine, build_session_factory
+from app.domain.errors import DomainError
 from app.models.user import User
 from app.services.assistant_service import AssistantAnswer, AssistantService
 from app.services.auth_service import AuthenticatedUser
@@ -60,12 +61,10 @@ def score(item: dict[str, Any], answer: AssistantAnswer) -> Score:
 
 def main() -> int:
     settings = get_settings()
-    if settings.assistant_api_key is None:
-        print("ASSISTANT_API_KEY is not set: nothing to evaluate", file=sys.stderr)
+    model = build_chat_model(settings)
+    if model is None:
+        print("The assistant is off (no ASSISTANT_API_KEY, provider anthropic)", file=sys.stderr)
         return 1
-    model = AnthropicChatModel(
-        settings.assistant_api_key.get_secret_value(), settings.assistant_model
-    )
     factory = build_session_factory(build_engine(settings.database_url.get_secret_value()))
     rows = []
     passed = 0
@@ -77,7 +76,10 @@ def main() -> int:
                 found.id, found.username, found.full_name, found.role, found.work_center_id
             )
             service = AssistantService(session, SystemClock(), settings, model)
-            answer = service.ask(item["question"], user)
+            try:
+                answer = service.ask(item["question"], user)
+            except DomainError as exc:  # e.g. the model timed out: a failed question
+                answer = AssistantAnswer(f"[{exc.code}] {exc.message}", [], [], 0)
         result = score(item, answer)
         passed += result.passed
         tools = ", ".join(
@@ -91,8 +93,9 @@ def main() -> int:
             f"{mark[result.tools_ok]} | {mark[result.facts_ok and result.error_ok]} | "
             f"{grounded} | {text} |"
         )
+    model_name = f"{settings.assistant_provider}/{settings.assistant_model}"
     print(
-        f"# Assistant evaluation (BR-AI-05)\n\nModel: `{settings.assistant_model}`. "
+        f"# Assistant evaluation (BR-AI-05)\n\nModel: `{model_name}`. "
         f"Passed **{passed}/{len(rows)}**.\n"
     )
     print("| # | User | Question | Tools called | Tools | Facts | Grounded | Answer |")
