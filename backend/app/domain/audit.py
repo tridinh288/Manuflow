@@ -38,6 +38,9 @@ class AuditAction(StrEnum):
     ORDER_MATERIALS_CHECKED = "ORDER_MATERIALS_CHECKED"
     ORDER_STARTED = "ORDER_STARTED"
     ORDER_CANCELLED = "ORDER_CANCELLED"
+    ORDER_COMPLETED = "ORDER_COMPLETED"
+    OPERATION_PROGRESS_REPORTED = "OPERATION_PROGRESS_REPORTED"
+    OPERATION_PROGRESS_CORRECTED = "OPERATION_PROGRESS_CORRECTED"
 
 
 class AuditEntity(StrEnum):
@@ -50,6 +53,7 @@ class AuditEntity(StrEnum):
     INVENTORY_TRANSACTION = "inventory_transaction"
     PRODUCTION_ORDER = "production_order"
     PRODUCTION_ORDER_MATERIAL = "production_order_material"
+    PRODUCTION_OPERATION = "production_operation"
 
 
 def is_sensitive_key(key: str) -> bool:

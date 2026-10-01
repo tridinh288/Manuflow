@@ -75,6 +75,9 @@ ENDPOINT_ACCESS: dict[tuple[str, str], AccessRule] = {
     ),
     ("POST", "/api/v1/production-orders/{order_id}/start"): perm(Permission.ORDER_START),
     ("POST", "/api/v1/production-orders/{order_id}/cancel"): perm(Permission.ORDER_CANCEL),
+    ("POST", "/api/v1/production-operations/{operation_id}/progress"): perm(
+        Permission.OPERATION_REPORT
+    ),
     ("POST", "/api/v1/inventory/issues"): perm(Permission.INVENTORY_ISSUE),
     ("POST", "/api/v1/inventory/returns"): perm(Permission.INVENTORY_RETURN),
 }
@@ -263,6 +266,13 @@ PROTECTED_CALLS: list[Call] = [
     ),
     Call(
         "POST",
+        "/api/v1/production-operations/{operation_id}/progress",
+        json=lambda n: {"good_delta": n},
+        idempotency_key=True,
+        worker_scoped=True,
+    ),
+    Call(
+        "POST",
         "/api/v1/inventory/issues",
         json=lambda n: {"order_material_id": -1, "quantity": "1"},
         idempotency_key=True,
@@ -292,6 +302,7 @@ def targets(
     routing_factory,
     order_factory,
     order_line_factory,
+    operation_factory,
 ) -> dict[str, int]:
     """One existing, unused row of each kind for the path parameters."""
     product = product_factory()
@@ -314,6 +325,9 @@ def targets(
         "shortage_order_id": order_factory(plannable, status="MATERIAL_SHORTAGE").id,
         # READY with no material lines: nothing left to issue, so start is allowed.
         "startable_order_id": order_factory(plannable, status="READY_TO_PRODUCE").id,
+        "operation_id": operation_factory(
+            order_factory(plannable, status="IN_PROGRESS"), 10, "QC", work_center_factory()
+        ).id,
         "ready_line_id": order_line_factory(
             order_factory(plannable, status="READY_TO_PRODUCE"),
             material_factory(),

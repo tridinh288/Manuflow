@@ -39,7 +39,11 @@ from app.domain.errors import (
 from app.main import create_app
 from app.models.bom import BomHeader, BomItem
 from app.models.master_data import Inventory, Material, Product
-from app.models.production import ProductionOrder, ProductionOrderMaterial
+from app.models.production import (
+    ProductionOperation,
+    ProductionOrder,
+    ProductionOrderMaterial,
+)
 from app.models.routing import Routing, RoutingStep
 from app.models.user import User
 from app.models.warehouse import DEFAULT_WAREHOUSE_CODE, Warehouse
@@ -177,6 +181,34 @@ BomFactory = Callable[..., BomHeader]
 RoutingFactory = Callable[..., Routing]
 OrderFactory = Callable[..., ProductionOrder]
 OrderLineFactory = Callable[..., ProductionOrderMaterial]
+OperationFactory = Callable[..., ProductionOperation]
+
+
+@pytest.fixture
+def operation_factory(db_session: Session) -> OperationFactory:
+    def create(
+        order: ProductionOrder,
+        sequence: int,
+        operation_type: str,
+        work_center: WorkCenter,
+        *,
+        status: str = "PENDING",
+        good: int = 0,
+        rejected: int = 0,
+    ) -> ProductionOperation:
+        operation = ProductionOperation(
+            production_order_id=order.id,
+            sequence=sequence,
+            operation_type=operation_type,
+            work_center_id=work_center.id,
+            status=status,
+            good_quantity=good,
+            rejected_quantity=rejected,
+        )
+        insert(db_session, operation)
+        return operation
+
+    return create
 
 
 @pytest.fixture

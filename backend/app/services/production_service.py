@@ -401,6 +401,34 @@ class ProductionOrderService:
             product = self._product(order)
         return OrderView(order, product)
 
+    def complete_from_operations(
+        self,
+        order: ProductionOrder,
+        completed_quantity: int,
+        actor: Actor,
+        context: RequestContext,
+    ) -> None:
+        """D-12: the last operation completed, so the order is COMPLETED.
+
+        Runs inside the caller's transaction with the order row already locked (the
+        progress report); it is the system action COMPLETE of the state machine.
+        """
+        before = OrderStatus(order.status)
+        after = transition(before, OrderAction.COMPLETE, OrderStatus.COMPLETED)
+        order.status = after.value
+        order.completed_quantity = completed_quantity
+        order.completed_at = self._clock.now()
+        self._session.flush()
+        self._audit_status(
+            AuditAction.ORDER_COMPLETED,
+            order,
+            before,
+            after,
+            actor,
+            context,
+            {"completed_quantity": completed_quantity},
+        )
+
     def _reserve(
         self,
         order: ProductionOrder,
