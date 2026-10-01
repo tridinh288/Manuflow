@@ -2,8 +2,8 @@
 
 This project is a student/personal simulation of an internal manufacturing management system. It models common workflows such as BOM management, material planning, inventory reservation, production planning, and workshop progress tracking. It is not a production ERP, and the author does not claim professional manufacturing experience.
 
-> Status: **MVP complete (Phases 1–7)** plus the demo UI (Phase 8, React). The AI assistant
-> (Phase 9) is an optional extension.
+> Status: **MVP complete (Phases 1–7)** plus the demo UI (Phase 8, React) and a read-only AI
+> assistant (Phase 9, off unless an API key is configured).
 
 ## The workflow
 
@@ -130,6 +130,26 @@ call demo.manager GET /dashboard/bottlenecks | jq '.items[] | select(.bottleneck
 call demo.qc    POST /production-operations/$(op 40)/progress '{"good_delta": 396, "rejected_delta": 2}' | jq -c "$progress"
 call demo.manager GET /production-orders/7 | jq '{status, completed_quantity}'   # COMPLETED, 396
 ```
+
+## AI assistant (optional)
+
+Ask questions such as "Tuần này có làm được 150 FRAME-A không?" or "Lệnh nào đang trễ và vì
+sao?" with `POST /api/v1/assistant/ask`. Set `ASSISTANT_API_KEY` (and optionally
+`ASSISTANT_MODEL`) in `.env` to switch it on; without a key it answers 503 and nothing
+else changes.
+
+- Six **read-only** tools (BR-AI-01): material requirements, a what-if of the
+  all-or-nothing reservation, order status, order risks, bottlenecks, low stock. There is
+  no tool that writes; asked to change something, the assistant names the page or endpoint
+  (BR-AI-04).
+- Each tool runs **as the caller**, through the same service and permission as the REST
+  endpoint with the same data, and returns the API's own response model (BR-AI-02/03): a
+  worker asking about risks gets the same 403 as the API.
+- Numbers in the answer must come from the tools; any other number is returned in
+  `ungrounded_numbers` with `grounded: false`.
+- `app/assistant/eval_questions.json` holds 20 evaluation questions with the tools and
+  facts expected (BR-AI-05); a test checks those facts against the seeded data, and
+  `python -m app.assistant.evaluate` runs them against the real model.
 
 ## Key design decisions
 

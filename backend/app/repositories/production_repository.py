@@ -157,6 +157,11 @@ class ProductionOrderRepository:
         ).all()
         return [(order, product) for order, product in rows], total
 
+    def id_by_number(self, order_number: str) -> int | None:
+        return self._session.scalar(
+            select(ProductionOrder.id).where(ProductionOrder.order_number == order_number)
+        )
+
     def get_in_scope(
         self, order_id: int, work_center_id: int | None
     ) -> tuple[ProductionOrder, Product] | None:

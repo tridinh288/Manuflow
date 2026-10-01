@@ -130,6 +130,14 @@ Mỗi mục ghi: AI đã viết gì, test hoặc review nào phát hiện, sửa
 - **Bài học:** chạy toàn bộ test trước khi commit, kể cả khi thay đổi "chỉ thêm một trường"; mọi hàm danh sách cần một test với danh sách rỗng (giống mục 12).
 - **PR:** phase-8/orders-workcenter.
 
+### 17. Bộ kiểm tra "số trong câu trả lời phải có trong kết quả tool" bị lọt (Phase 9)
+
+- **AI viết:** kiểm tra BR-AI-03 bằng cách so mọi con số trong câu trả lời với các con số có trong kết quả tool.
+- **Phát hiện:** test cố tình cho model bịa "khoảng 3 ngày nữa", nhưng câu trả lời vẫn được coi là có căn cứ. Lần đầu do `material_id: 3` trong kết quả; sau khi bỏ qua các trường id thì vẫn lọt vì kết quả có đúng 3 vật tư (độ dài danh sách được tính là số đếm hợp lệ).
+- **Sửa:** bỏ qua các trường `id` / `*_id`, thêm test riêng cho điều đó, và ghi rõ trong docstring rằng đây là heuristic: bắt được số bịa, không bắt được số nhỏ trùng ngẫu nhiên. Phần đánh giá dữ kiện của từng câu trả lời do bộ đánh giá BR-AI-05 đảm nhận.
+- **Bài học:** với kiểm tra dựa trên heuristic, phải thử đúng loại đầu vào nó dễ nhầm nhất, và nói rõ giới hạn thay vì coi là đảm bảo.
+- **PR:** phase-9/assistant-backend.
+
 ## Rà soát đặc tả
 
 Ở bước rà soát (B20), AI tìm ra 10 điểm mâu thuẫn hoặc còn thiếu trong `docs/requirements.md`. Các điểm này được ghi lại cùng quyết định đã duyệt trong [`decisions.md`](decisions.md).

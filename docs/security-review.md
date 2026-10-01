@@ -30,6 +30,18 @@ Ngoài ra: idempotency lưu fingerprint dạng HMAC có khóa, không lưu body 
 
 Mỗi bản sửa đã được kiểm chứng ngược: gỡ bản sửa thì test tương ứng fail.
 
+## Trợ lý AI (Phase 9)
+
+| Rủi ro | Cách xử lý | Bằng chứng |
+| --- | --- | --- |
+| Lộ dữ liệu ngoài quyền qua LLM | Tool chạy với danh nghĩa người hỏi, cùng quyền và phạm vi WORKER như REST | `tests/integration/test_assistant.py::test_br_ai_02_worker_gets_the_api_refusals` |
+| Lộ bí mật cho nhà cung cấp LLM | Model chỉ thấy prompt hệ thống, câu hỏi và kết quả tool (schema Pydantic của API); lỗi chỉ có mã và thông điệp | `test_br_ai_03_availability_matches_the_order_check_and_answers_are_checked`, `test_br_ai_03_tool_failures_reach_the_model_as_codes_only` |
+| Prompt injection (ví dụ ghi chú lệnh chứa chỉ dẫn) | Không có tool ghi, nên không thể biến chỉ dẫn thành thay đổi dữ liệu; câu trả lời bịa số bị gắn cờ `grounded: false` | `test_br_ai_01_and_br_ai_04_tools_are_read_only` |
+| API key | `ASSISTANT_API_KEY` là `SecretStr`, chỉ từ biến môi trường; thiếu key thì tắt trợ lý | `test_assistant_is_off_without_a_key_and_stops_after_max_steps` |
+| Chi phí / vòng lặp vô hạn | Tối đa `ASSISTANT_MAX_STEPS` (mặc định 6) lượt gọi model mỗi câu hỏi; câu hỏi ≤ 1000 ký tự | cùng test trên |
+
+Chưa có: giới hạn tần suất hỏi theo người dùng. Nên thêm trước khi mở cho nhiều người dùng.
+
 ## Khuyến nghị cho chủ repo (không tự thay đổi)
 
 - Branch protection của `main` đang để `enforce_admins = false`, nên tài khoản admin có thể bỏ qua quy tắc. Nên bật "Do not allow bypassing the above settings" trong Settings → Branches.

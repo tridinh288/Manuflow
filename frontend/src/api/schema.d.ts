@@ -24,6 +24,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assistant/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask
+         * @description Answer from read-only tools run as the caller; 503 ASSISTANT_DISABLED without a key.
+         */
+        post: operations["ask_api_v1_assistant_ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assistant/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Assistant Status
+         * @description Whether the assistant is configured; the UI hides it otherwise.
+         */
+        get: operations["assistant_status_api_v1_assistant_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit-logs": {
         parameters: {
             query?: never;
@@ -761,6 +801,33 @@ export interface components {
             quantity_delta: string;
             /** Reason */
             reason: string;
+        };
+        /** AskRequest */
+        AskRequest: {
+            /** Question */
+            question: string;
+        };
+        /** AskResponse */
+        AskResponse: {
+            /** Answer */
+            answer: string;
+            /** Grounded */
+            grounded: boolean;
+            /** Tool Calls */
+            tool_calls: components["schemas"]["ToolRunResponse"][];
+            /** Ungrounded Numbers */
+            ungrounded_numbers: string[];
+        };
+        /** AssistantStatusResponse */
+        AssistantStatusResponse: {
+            /** Enabled */
+            enabled: boolean;
+            /** Model */
+            model: string | null;
+            /** Provider */
+            provider: string;
+            /** Tools */
+            tools: string[];
         };
         /**
          * AuditAction
@@ -1635,6 +1702,21 @@ export interface components {
              */
             token_type: "bearer";
         };
+        /** ToolRunResponse */
+        ToolRunResponse: {
+            /** Arguments */
+            arguments: {
+                [key: string]: unknown;
+            };
+            /** Name */
+            name: string;
+            /** Ok */
+            ok: boolean;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            };
+        };
         /** TransactionResponse */
         TransactionResponse: {
             /**
@@ -1787,6 +1869,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReconciliationResponse"];
+                };
+            };
+        };
+    };
+    ask_api_v1_assistant_ask_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assistant_status_api_v1_assistant_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantStatusResponse"];
                 };
             };
         };

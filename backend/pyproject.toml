@@ -20,6 +20,8 @@ dependencies = [
     # B2: JWT access tokens and Argon2 password hashing.
     "pyjwt>=2.9",
     "pwdlib[argon2]>=0.2",
+    # Phase 9 (B17): the assistant's LLM client; off unless ASSISTANT_API_KEY is set.
+    "anthropic>=0.40",
 ]
 
 [project.optional-dependencies]
@@ -36,6 +38,9 @@ dev = [
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+
+[tool.setuptools.package-data]
+app = ["assistant/*.md", "assistant/*.json"]
 
 [tool.ruff]
 line-length = 100

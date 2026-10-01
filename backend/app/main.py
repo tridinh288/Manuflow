@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.errors import register_exception_handlers
 from app.api.health import router as health_router
 from app.api.v1.router import api_router
+from app.assistant.model import AnthropicChatModel
 from app.core.clock import Clock, SystemClock
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -38,6 +39,11 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.state.fingerprint_secret = hmac.new(
         settings.jwt_secret.get_secret_value().encode(), b"idempotency-fingerprint", "sha256"
     ).digest()
+    # Phase 9: the assistant exists only when a key is configured (B17).
+    key = settings.assistant_api_key
+    app.state.chat_model = (
+        AnthropicChatModel(key.get_secret_value(), settings.assistant_model) if key else None
+    )
     app.state.token_service = TokenService(
         settings.jwt_secret.get_secret_value(), settings.jwt_expire_minutes
     )

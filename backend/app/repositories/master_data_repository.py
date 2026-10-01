@@ -28,6 +28,12 @@ class _CodedRepository[M: (Product, Material, WorkCenter)]:
         row = self._session.get(self.model, row_id, with_for_update=True, populate_existing=True)
         return row  # type: ignore[return-value]
 
+    def by_code(self, code: str) -> M | None:
+        row = self._session.scalars(
+            select(self.model).where(type(self).code_column == code)
+        ).first()
+        return row  # type: ignore[return-value]
+
     def code_exists(self, code: str) -> bool:
         count = self._session.scalar(select(func.count()).where(type(self).code_column == code))
         return (count or 0) > 0

@@ -19,6 +19,7 @@ class ErrorCategory(StrEnum):
     CONFLICT = "CONFLICT"
     VALIDATION = "VALIDATION"
     CONCURRENCY = "CONCURRENCY"
+    UNAVAILABLE = "UNAVAILABLE"
 
 
 class DomainError(Exception):
@@ -53,3 +54,9 @@ class BusinessValidationError(DomainError):
 
 class ConcurrencyConflictError(DomainError):
     category = ErrorCategory.CONCURRENCY
+
+
+class ServiceUnavailableError(DomainError):
+    """A feature that is switched off by configuration (e.g. the assistant without a key)."""
+
+    category = ErrorCategory.UNAVAILABLE
