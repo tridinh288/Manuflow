@@ -57,11 +57,13 @@ known-third-party = ["alembic"]
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
-files = ["app"]
+files = ["app", "seed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers --import-mode=importlib"
+# The demo seed (backend/seed) is imported by its test; the Docker image sets PYTHONPATH, CI does not.
+pythonpath = ["."]
 markers = [
     "concurrency: uses several real DB connections on separate threads (B15)",
 ]
