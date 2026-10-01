@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.bom import VersionStatus
 from app.domain.routing import OperationType
+from app.schemas.common import MAX_ID
 from app.services.routing_service import RoutingView
 
 
@@ -12,7 +13,7 @@ class RoutingStepRequest(BaseModel):
 
     sequence: int = Field(gt=0, le=9999)
     operation_type: OperationType
-    work_center_id: int = Field(gt=0)
+    work_center_id: int = Field(gt=0, le=MAX_ID)
 
 
 class RoutingStepsRequest(BaseModel):
