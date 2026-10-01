@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
@@ -6,12 +7,14 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     PrimaryKeyConstraint,
     String,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.mysql import DATETIME
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import MYSQL_TABLE_OPTIONS, Base
 from app.db.types import UTCDateTime
@@ -74,3 +77,73 @@ class ProductionOrder(Base):
         DATETIME(fsp=6),
         server_default=text("CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)"),
     )
+
+    materials: Mapped[list["ProductionOrderMaterial"]] = relationship(
+        order_by="ProductionOrderMaterial.material_id", lazy="selectin"
+    )
+    operations: Mapped[list["ProductionOperation"]] = relationship(
+        order_by="ProductionOperation.sequence", lazy="selectin"
+    )
+
+
+class ProductionOrderMaterial(Base):
+    """One material line of an order, snapshotted by plan (D-04).
+
+    ``reserved_quantity`` is what is *still* reserved: RESERVE sets it to required,
+    ISSUE moves quantity from reserved to issued, RELEASE sets it back to 0 (B11).
+    """
+
+    __tablename__ = "production_order_materials"
+    __table_args__ = (
+        UniqueConstraint("production_order_id", "material_id"),
+        CheckConstraint("required_quantity > 0", name="required_positive"),
+        CheckConstraint(
+            "reserved_quantity >= 0 AND issued_quantity >= 0 AND returned_quantity >= 0 "
+            "AND shortage_quantity >= 0",
+            name="quantities_non_negative",
+        ),
+        CheckConstraint(
+            "reserved_quantity + issued_quantity <= required_quantity",
+            name="reserved_and_issued_within_required",
+        ),
+        CheckConstraint("returned_quantity <= issued_quantity", name="returned_within_issued"),
+        MYSQL_TABLE_OPTIONS,
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    production_order_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("production_orders.id"))
+    material_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("materials.id"))
+    required_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4))
+    reserved_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), server_default=text("0"))
+    issued_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), server_default=text("0"))
+    returned_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), server_default=text("0"))
+    shortage_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), server_default=text("0"))
+
+
+OPERATION_STATUS_CHECK = "status IN ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')"
+
+
+class ProductionOperation(Base):
+    """One routing step instantiated for an order by plan (B8)."""
+
+    __tablename__ = "production_operations"
+    __table_args__ = (
+        UniqueConstraint("production_order_id", "sequence"),
+        Index("ix_production_operations_work_center_id_status", "work_center_id", "status"),
+        CheckConstraint(OPERATION_STATUS_CHECK, name="status_valid"),
+        CheckConstraint(
+            "good_quantity >= 0 AND rejected_quantity >= 0", name="quantities_non_negative"
+        ),
+        MYSQL_TABLE_OPTIONS,
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    production_order_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("production_orders.id"))
+    sequence: Mapped[int] = mapped_column(Integer)
+    operation_type: Mapped[str] = mapped_column(String(32))
+    work_center_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("work_centers.id"))
+    status: Mapped[str] = mapped_column(String(32))
+    good_quantity: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    rejected_quantity: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())

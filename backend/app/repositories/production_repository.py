@@ -3,7 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.domain.order_state import OPEN_STATUSES
 from app.models.master_data import Product
-from app.models.production import DocumentSequence, ProductionOrder
+from app.models.production import (
+    DocumentSequence,
+    ProductionOperation,
+    ProductionOrder,
+    ProductionOrderMaterial,
+)
 
 ORDER_SEQUENCE = "production_order"
 
@@ -71,5 +76,24 @@ class ProductionOrderRepository:
                     ProductionOrder.status.in_([s.value for s in OPEN_STATUSES]),
                 )
                 .order_by(ProductionOrder.order_number)
+            )
+        )
+
+    def add_lines(self, lines: list[ProductionOrderMaterial]) -> None:
+        self._session.add_all(lines)
+        self._session.flush()
+
+    def add_operations(self, operations: list[ProductionOperation]) -> None:
+        self._session.add_all(operations)
+        self._session.flush()
+
+    def lines_for_order(self, order_id: int) -> list[ProductionOrderMaterial]:
+        """Material lines in material_id order; changed only under the order row lock."""
+        return list(
+            self._session.scalars(
+                select(ProductionOrderMaterial)
+                .where(ProductionOrderMaterial.production_order_id == order_id)
+                .order_by(ProductionOrderMaterial.material_id)
+                .execution_options(populate_existing=True)
             )
         )

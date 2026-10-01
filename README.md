@@ -6,7 +6,8 @@ This project is a student/personal simulation of an internal manufacturing manag
 > authentication, permissions, audit and idempotency; master data, versioned BOMs and
 > routings, BOM explosion; inventory ledger with receipts, adjustments and reconciliation).
 > Phase 5 so far: the order state machine, numbered orders (`PO-YYYY-NNNNN`) and DRAFT
-> updates, with `allowed_actions` computed per user.
+> updates, with `allowed_actions` computed per user; `plan` (snapshot of BOM and routing,
+> material lines, operations) and `check-materials` with all-or-nothing reservation.
 
 ## Quick start
 

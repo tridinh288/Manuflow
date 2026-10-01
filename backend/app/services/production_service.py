@@ -8,21 +8,35 @@ is allowed. Lock order (B12): idempotency key -> document_sequences -> product (
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.core.clock import Clock
 from app.db.transaction import transaction
+from app.domain import inventory
 from app.domain.audit import AuditAction, AuditEntity, changed_fields
 from app.domain.errors import BusinessValidationError, ConflictError, NotFoundError
 from app.domain.explode import validate_order_quantity
-from app.domain.order_state import OrderAction, OrderStatus, ensure_allowed
+from app.domain.inventory import TransactionType
+from app.domain.operations import OperationStatus
+from app.domain.order_state import OrderAction, OrderStatus, ensure_allowed, transition
+from app.domain.reservation import RequiredLine, decide
 from app.models.master_data import Product
-from app.models.production import ProductionOrder
+from app.models.production import (
+    ProductionOperation,
+    ProductionOrder,
+    ProductionOrderMaterial,
+)
+from app.repositories.bom_repository import BomRepository
+from app.repositories.inventory_repository import InventoryRepository
 from app.repositories.production_repository import ProductionOrderRepository
+from app.repositories.routing_repository import RoutingRepository
 from app.services.audit_service import AuditService
+from app.services.bom_service import explode_header
 from app.services.context import Actor, RequestContext
+from app.services.inventory_service import InventoryService, balance_of
 
 _AUDITED_FIELDS = ("planned_quantity", "due_date", "notes")
 
@@ -49,6 +63,25 @@ class OrderUpdate:
 class OrderView:
     order: ProductionOrder
     product: Product
+
+
+@dataclass(frozen=True)
+class MaterialCheck:
+    """One line of the reservation check (BR-INV-05): required vs available."""
+
+    material_id: int
+    material_code: str
+    unit: str
+    decimal_places: int
+    required: Decimal
+    available: Decimal
+    shortage: Decimal
+
+
+@dataclass(frozen=True)
+class ReservationResult:
+    view: OrderView
+    checks: list[MaterialCheck]
 
 
 def format_order_number(year: int, value: int) -> str:
@@ -139,6 +172,174 @@ class ProductionOrderService:
             if product is None:  # impossible: products are never deleted (D-19)
                 raise RuntimeError(f"product {order.product_id} of order {order.id} is missing")
         return OrderView(order, product)
+
+    def plan(self, order_id: int, actor: Actor, context: RequestContext) -> ReservationResult:
+        """B7 plan, atomic (D-07): snapshot BOM and routing (D-04), create the material
+        lines and PENDING operations, then reserve all or nothing (D-08).
+
+        Lock order (B12): order row -> inventory rows by ascending material_id.
+        """
+        with transaction(self._session):
+            order = self._lock(order_id)
+            before = OrderStatus(order.status)
+            ensure_allowed(before, OrderAction.PLAN)
+            product = self._product(order)
+            if not product.active:  # BR-MD-04
+                raise ConflictError("PRODUCT_INACTIVE", "The product is inactive.")
+            boms, routings = BomRepository(self._session), RoutingRepository(self._session)
+            bom = boms.active_for_product(product.id)
+            if bom is None:
+                raise ConflictError("NO_ACTIVE_BOM", "The product has no ACTIVE BOM.")
+            routing = routings.active_for_product(product.id)
+            if routing is None:
+                raise ConflictError("NO_ACTIVE_ROUTING", "The product has no ACTIVE routing.")
+
+            # D-04: what the order will use, frozen now; later master data edits do not
+            # change it.
+            order.bom_header_id, order.routing_id = bom.id, routing.id
+            lines = [
+                ProductionOrderMaterial(
+                    production_order_id=order.id,
+                    material_id=requirement.material_id,
+                    required_quantity=requirement.required_quantity,
+                )
+                for requirement in explode_header(boms, bom, order.planned_quantity)
+            ]
+            self._orders.add_lines(lines)
+            self._orders.add_operations(
+                [
+                    ProductionOperation(
+                        production_order_id=order.id,
+                        sequence=step.sequence,
+                        operation_type=step.operation_type,
+                        work_center_id=step.work_center_id,
+                        status=OperationStatus.PENDING.value,
+                    )
+                    for step in routing.steps
+                ]
+            )
+            checks, reserved = self._reserve(order, lines, actor, context)
+            after = transition(
+                before,
+                OrderAction.PLAN,
+                OrderStatus.READY_TO_PRODUCE if reserved else OrderStatus.MATERIAL_SHORTAGE,
+            )
+            order.status = after.value
+            self._session.flush()
+            self._audit_status(
+                AuditAction.ORDER_PLANNED,
+                order,
+                before,
+                after,
+                actor,
+                context,
+                {"bom_version": bom.version, "routing_version": routing.version},
+            )
+        return ReservationResult(OrderView(order, product), checks)
+
+    def check_materials(
+        self, order_id: int, actor: Actor, context: RequestContext
+    ) -> ReservationResult:
+        """D-09: the explicit way out of MATERIAL_SHORTAGE, on the snapshotted lines."""
+        with transaction(self._session):
+            order = self._lock(order_id)
+            before = OrderStatus(order.status)
+            ensure_allowed(before, OrderAction.CHECK_MATERIALS)
+            lines = self._orders.lines_for_order(order.id)
+            checks, reserved = self._reserve(order, lines, actor, context)
+            after = transition(
+                before,
+                OrderAction.CHECK_MATERIALS,
+                OrderStatus.READY_TO_PRODUCE if reserved else OrderStatus.MATERIAL_SHORTAGE,
+            )
+            order.status = after.value
+            self._session.flush()
+            self._audit_status(
+                AuditAction.ORDER_MATERIALS_CHECKED, order, before, after, actor, context, {}
+            )
+            product = self._product(order)
+        return ReservationResult(OrderView(order, product), checks)
+
+    def _reserve(
+        self,
+        order: ProductionOrder,
+        lines: list[ProductionOrderMaterial],
+        actor: Actor,
+        context: RequestContext,
+    ) -> tuple[list[MaterialCheck], bool]:
+        """B6 reservation algorithm, steps 3-6, inside the caller's transaction.
+
+        All or nothing (D-08): one shortage anywhere and nothing is reserved; every
+        line still reports its shortage (BR-INV-05).
+        """
+        stock = InventoryRepository(self._session)
+        material_ids = sorted(line.material_id for line in lines)
+        materials = stock.materials_by_id(material_ids)
+        rows = stock.lock_balances(material_ids)  # ascending material_id (B12)
+        decision = decide(
+            [RequiredLine(line.material_id, line.required_quantity) for line in lines],
+            {material_id: balance_of(row) for material_id, row in rows.items()},
+        )
+        ledger = InventoryService(self._session)
+        by_material = {line.material_id: line for line in lines}
+        for check in decision.checks:
+            line = by_material[check.material_id]
+            line.shortage_quantity = check.shortage
+            if decision.reservable:
+                row = rows[check.material_id]
+                movement = inventory.reserve(balance_of(row), line.required_quantity)
+                ledger.record_movement(
+                    row,
+                    materials[check.material_id],
+                    movement,
+                    TransactionType.RESERVE,
+                    actor,
+                    context,
+                    production_order_id=order.id,
+                    order_material_id=line.id,
+                )
+                line.reserved_quantity = line.required_quantity
+        self._session.flush()
+        checks = [
+            MaterialCheck(
+                material_id=check.material_id,
+                material_code=materials[check.material_id].material_code,
+                unit=materials[check.material_id].unit,
+                decimal_places=materials[check.material_id].decimal_places,
+                required=check.required,
+                available=check.available,
+                shortage=check.shortage,
+            )
+            for check in decision.checks
+        ]
+        return checks, decision.reservable
+
+    def _audit_status(
+        self,
+        action: AuditAction,
+        order: ProductionOrder,
+        before: OrderStatus,
+        after: OrderStatus,
+        actor: Actor,
+        context: RequestContext,
+        extra: dict[str, Any],
+    ) -> None:
+        """BR-PO-04: every status change is audited with the old and new status."""
+        self._audit.record(
+            action=action,
+            entity_type=AuditEntity.PRODUCTION_ORDER,
+            entity_id=order.id,
+            actor=actor,
+            context=context,
+            old_value={"status": before.value},
+            new_value={"status": after.value, **extra},
+        )
+
+    def _product(self, order: ProductionOrder) -> Product:
+        product = self._session.get(Product, order.product_id)
+        if product is None:  # impossible: products are never deleted (D-19)
+            raise RuntimeError(f"product {order.product_id} of order {order.id} is missing")
+        return product
 
     def _lock(self, order_id: int) -> ProductionOrder:
         order = self._orders.get_for_update(order_id)

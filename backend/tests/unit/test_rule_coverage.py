@@ -13,10 +13,7 @@ COMPLETED_PHASE_PREFIXES = [
     "BR-MD",  # Phase 3
     "BR-BOM",
     "BR-RT",
-    "BR-INV-01",  # Phase 4 (BR-INV-05/06 are reservations, Phase 5)
-    "BR-INV-02",
-    "BR-INV-03",
-    "BR-INV-04",
+    "BR-INV",  # Phase 4 (01-04) and Phase 5 reservations (05-06)
 ]
 
 

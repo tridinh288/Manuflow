@@ -75,28 +75,7 @@ class BomService:
             if not product.active:
                 raise ConflictError("PRODUCT_INACTIVE", "The product is inactive.")
             header = self._explosion_header(product.id, bom_header_id)
-            materials = self._boms.materials_by_id([item.material_id for item in header.items])
-            inactive = sorted(
-                materials[item.material_id].material_code
-                for item in header.items
-                if not materials[item.material_id].active
-            )
-            if inactive:
-                raise _materials_inactive(inactive)
-            return explode(
-                (
-                    ExplosionLine(
-                        material_id=item.material_id,
-                        material_code=materials[item.material_id].material_code,
-                        unit=materials[item.material_id].unit,
-                        decimal_places=materials[item.material_id].decimal_places,
-                        qty_per_unit=item.qty_per_unit,
-                        scrap_rate=item.scrap_rate,
-                    )
-                    for item in header.items
-                ),
-                quantity,
-            )
+            return explode_header(self._boms, header, quantity)
 
     def _explosion_header(self, product_id: int, bom_header_id: int | None) -> BomHeader:
         if bom_header_id is None:
@@ -259,3 +238,31 @@ def _product_not_found() -> NotFoundError:
 
 def _bom_not_found() -> NotFoundError:
     return NotFoundError("BOM_NOT_FOUND", "BOM version not found.")
+
+
+def explode_header(
+    boms: BomRepository, header: BomHeader, quantity: int
+) -> list[MaterialRequirement]:
+    """BR-BOM-05 on one BOM version, inside the caller's transaction (also used by plan)."""
+    materials = boms.materials_by_id([item.material_id for item in header.items])
+    inactive = sorted(
+        materials[item.material_id].material_code
+        for item in header.items
+        if not materials[item.material_id].active
+    )
+    if inactive:
+        raise _materials_inactive(inactive)
+    return explode(
+        (
+            ExplosionLine(
+                material_id=item.material_id,
+                material_code=materials[item.material_id].material_code,
+                unit=materials[item.material_id].unit,
+                decimal_places=materials[item.material_id].decimal_places,
+                qty_per_unit=item.qty_per_unit,
+                scrap_rate=item.scrap_rate,
+            )
+            for item in header.items
+        ),
+        quantity,
+    )

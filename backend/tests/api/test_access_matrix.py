@@ -65,6 +65,10 @@ ENDPOINT_ACCESS: dict[tuple[str, str], AccessRule] = {
     ("GET", "/api/v1/admin/inventory-reconciliation"): perm(Permission.AUDIT_READ),
     ("POST", "/api/v1/production-orders"): perm(Permission.ORDER_CREATE),
     ("PATCH", "/api/v1/production-orders/{order_id}"): perm(Permission.ORDER_CREATE),
+    ("POST", "/api/v1/production-orders/{order_id}/plan"): perm(Permission.ORDER_PLAN),
+    ("POST", "/api/v1/production-orders/{order_id}/check-materials"): perm(
+        Permission.ORDER_CHECK_MATERIALS
+    ),
 }
 
 
@@ -130,6 +134,8 @@ class Call:
     path: str
     json: Callable[[int], dict[str, Any]] | None = None
     idempotency_key: bool = False  # D-22: the endpoint requires Idempotency-Key
+    # Path placeholder -> targets key, when the default target is in the wrong state.
+    params: tuple[tuple[str, str], ...] = ()
 
 
 PROTECTED_CALLS: list[Call] = [
@@ -222,6 +228,13 @@ PROTECTED_CALLS: list[Call] = [
         },
     ),
     Call("PATCH", "/api/v1/production-orders/{order_id}", json=lambda n: {"notes": f"n{n}"}),
+    Call("POST", "/api/v1/production-orders/{order_id}/plan", idempotency_key=True),
+    Call(
+        "POST",
+        "/api/v1/production-orders/{order_id}/check-materials",
+        idempotency_key=True,
+        params=(("order_id", "shortage_order_id"),),
+    ),
 ]
 
 
@@ -245,6 +258,9 @@ def targets(
     product = product_factory()
     component = material_factory()
     station = work_center_factory()
+    plannable = product_factory()
+    bom_factory(plannable, [(material_factory(), "1", "0")], status="ACTIVE")
+    routing_factory(plannable, [(10, "QC", work_center_factory())], status="ACTIVE")
     return {
         "user_id": user_factory(role=Role.WAREHOUSE).id,
         "product_id": product.id,
@@ -253,8 +269,10 @@ def targets(
         "bom_id": bom_factory(product, [(component, "2", "0")]).id,
         "component_id": component.id,
         "routing_id": routing_factory(product, [(10, "QC", station)]).id,
-        # Its own product: an open order blocks deactivating the target product (C-13).
-        "order_id": order_factory(product_factory()).id,
+        # Own product, ready to plan; an open order also blocks deactivating the target
+        # product (C-13).
+        "order_id": order_factory(plannable).id,
+        "shortage_order_id": order_factory(plannable, status="MATERIAL_SHORTAGE").id,
         "station_id": station.id,
     }
 
@@ -262,7 +280,7 @@ def targets(
 def _send(
     client: TestClient, call: Call, targets: dict[str, int], headers: dict[str, str], n: int
 ) -> int:
-    path = call.path.format(**targets)
+    path = call.path.format(**{**targets, **{k: targets[v] for k, v in call.params}})
     body = call.json(n) if call.json else None
     if body and "bom_header_id" in body:  # explode the target's own DRAFT version
         body = {**body, "bom_header_id": targets["bom_id"]}

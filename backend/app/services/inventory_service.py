@@ -102,8 +102,8 @@ class InventoryService:
                 )
             inventory.validate_movement_quantity(quantity, material.decimal_places)
             row = self._inventory.lock_balance(material.id)
-            movement = inventory.receive(_balance(row), quantity)
-            line = self._apply(
+            movement = inventory.receive(balance_of(row), quantity)
+            line = self.record_movement(
                 row,
                 material,
                 movement,
@@ -143,8 +143,8 @@ class InventoryService:
         with transaction(self._session):
             material = self._material(material_id)
             row = self._inventory.lock_balance(material.id)
-            movement = inventory.adjust(_balance(row), delta, material.decimal_places)
-            line = self._apply(
+            movement = inventory.adjust(balance_of(row), delta, material.decimal_places)
+            line = self.record_movement(
                 row, material, movement, TransactionType.ADJUSTMENT, actor, context, reason=reason
             )
             places = material.decimal_places
@@ -175,7 +175,7 @@ class InventoryService:
             )
         return material
 
-    def _apply(
+    def record_movement(
         self,
         row: Inventory,
         material: Material,
@@ -186,8 +186,13 @@ class InventoryService:
         *,
         reference: str | None = None,
         reason: str | None = None,
+        production_order_id: int | None = None,
+        order_material_id: int | None = None,
     ) -> InventoryTransaction:
-        """Update the balance and write its single ledger line (BR-INV-03)."""
+        """Update the balance and write its single ledger line (BR-INV-03).
+
+        Runs inside the caller's transaction, with the balance row already locked.
+        """
         row.on_hand_quantity = movement.after.on_hand
         row.reserved_quantity = movement.after.reserved
         self._session.flush()
@@ -200,6 +205,8 @@ class InventoryService:
                 reserved_delta=movement.reserved_delta,
                 on_hand_after=movement.after.on_hand,
                 reserved_after=movement.after.reserved,
+                production_order_id=production_order_id,
+                order_material_id=order_material_id,
                 reference=reference,
                 reason=reason,
                 created_by=actor.user_id,
@@ -208,7 +215,7 @@ class InventoryService:
         )
 
 
-def _balance(row: Inventory) -> Balance:
+def balance_of(row: Inventory) -> Balance:
     return Balance(on_hand=row.on_hand_quantity, reserved=row.reserved_quantity)
 
 

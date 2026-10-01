@@ -79,6 +79,15 @@ def adjust(balance: Balance, delta: Decimal, decimal_places: int) -> Movement:
     return Movement(on_hand_delta=delta, reserved_delta=Decimal(0), after=after)
 
 
+def reserve(balance: Balance, quantity: Decimal) -> Movement:
+    """RESERVE: reserved +q, on hand unchanged; only within what is available (D-20)."""
+    if quantity > balance.available:
+        raise ConflictError("INSUFFICIENT_STOCK", "Not enough available stock to reserve.", [])
+    after = Balance(balance.on_hand, balance.reserved + quantity)
+    _ensure_representable(after)
+    return Movement(on_hand_delta=Decimal(0), reserved_delta=quantity, after=after)
+
+
 def _ensure_representable(balance: Balance) -> None:
     if balance.on_hand >= MAX_BALANCE:
         raise BusinessValidationError(
