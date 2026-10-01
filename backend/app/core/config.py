@@ -37,9 +37,12 @@ class Settings(BaseSettings):
 
     # Phase 9 assistant (B17): provider and model are configuration; without a key the
     # assistant is off and the rest of the system is unaffected.
-    assistant_provider: Literal["anthropic"] = "anthropic"
+    # "anthropic" needs ASSISTANT_API_KEY; "ollama" is a free local model (no key) reached
+    # through Ollama's OpenAI-compatible API at ASSISTANT_BASE_URL.
+    assistant_provider: Literal["anthropic", "ollama"] = "anthropic"
     assistant_api_key: SecretStr | None = None
     assistant_model: str = Field(default="claude-sonnet-5", min_length=1, max_length=100)
+    assistant_base_url: str = "http://host.docker.internal:11434/v1"
     assistant_max_steps: int = Field(default=6, ge=1, le=12)
 
     # Risk thresholds (D-24).

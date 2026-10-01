@@ -47,7 +47,7 @@
   {"id": 16, "user": "demo.weld", "question": "Những lệnh nào đang có rủi ro?",
    "tools": ["get_order_risks"], "facts": [], "expect_error": "FORBIDDEN",
    "check": {"tool": "get_order_risks", "arguments": {}}},
-  {"id": 17, "user": "demo.cut", "question": "Kho còn bao nhiêu thép?",
+  {"id": 17, "user": "demo.cut", "question": "Vật tư nào trong kho đang sắp hết?",
    "tools": ["get_low_stock_materials"], "facts": [], "expect_error": "FORBIDDEN",
    "check": {"tool": "get_low_stock_materials", "arguments": {}}},
   {"id": 18, "user": "demo.warehouse", "question": "Kho có đủ vật tư cho 150 FRAME-A không?",

@@ -30,6 +30,9 @@ SYSTEM_PROMPT = (Path(__file__).parents[1] / "assistant" / "system_prompt.md").r
 )
 
 
+EMPTY_ANSWER_NUDGE = "Hãy trả lời câu hỏi trên bằng ít nhất một câu, theo các quy tắc đã nêu."
+
+
 @dataclass(frozen=True)
 class ToolRun:
     name: str
@@ -78,9 +81,20 @@ class AssistantService:
         specs = self.tool_specs()
         reply = Reply(text="")
         for step in range(1, self._settings.assistant_max_steps + 1):
-            reply = self._model.complete(SYSTEM_PROMPT, messages, specs)
-            if not reply.tool_calls:
+            try:
+                reply = self._model.complete(SYSTEM_PROMPT, messages, specs)
+            except Exception as exc:  # network, timeout, provider error: never a 500
+                logger.warning("Assistant model call failed: %s", type(exc).__name__)
+                raise ServiceUnavailableError(
+                    "ASSISTANT_UNAVAILABLE", "The assistant's model did not answer; try again."
+                ) from exc
+            if not reply.tool_calls and reply.text:
                 return self._answer(question, reply.text, runs, step)
+            if not reply.tool_calls:
+                # Some local models end a turn with nothing at all; ask once more.
+                messages.append({"role": "assistant", "content": [{"type": "text", "text": "…"}]})
+                messages.append({"role": "user", "content": EMPTY_ANSWER_NUDGE})
+                continue
             messages.append({"role": "assistant", "content": reply.content})
             results = []
             for call in reply.tool_calls:
