@@ -30,6 +30,8 @@ export type AuditLog = S['AuditLogResponse']
 export type AuditAction = S['AuditAction']
 export type AuditEntity = S['AuditEntity']
 export type OperationType = S['OperationType']
+export type AssistantStatus = S['AssistantStatusResponse']
+export type AssistantAnswer = S['AskResponse']
 
 export type Page<T> = { items: T[]; total: number }
 
