@@ -37,6 +37,20 @@ class InventoryRepository:
             .execution_options(populate_existing=True)
         ).one()
 
+    def read_balances(self, material_ids: Sequence[int]) -> dict[int, Inventory]:
+        """Plain read, no lock: for what-if answers that never decide or write anything."""
+        if not material_ids:
+            return {}
+        rows = self._session.scalars(
+            select(Inventory)
+            .join(Warehouse, Warehouse.id == Inventory.warehouse_id)
+            .where(
+                Inventory.material_id.in_(material_ids),
+                Warehouse.code == DEFAULT_WAREHOUSE_CODE,
+            )
+        ).all()
+        return {row.material_id: row for row in rows}
+
     def lock_balances(self, material_ids: Sequence[int]) -> dict[int, Inventory]:
         """B12: lock balance rows in ascending material_id order before reading them, so
         two orders sharing materials always queue in the same order (no deadlock)."""

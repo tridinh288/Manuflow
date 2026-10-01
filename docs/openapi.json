@@ -30,6 +30,94 @@
         "title": "AdjustmentRequest",
         "type": "object"
       },
+      "AskRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "question": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "AskRequest",
+        "type": "object"
+      },
+      "AskResponse": {
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "grounded": {
+            "title": "Grounded",
+            "type": "boolean"
+          },
+          "tool_calls": {
+            "items": {
+              "$ref": "#/components/schemas/ToolRunResponse"
+            },
+            "title": "Tool Calls",
+            "type": "array"
+          },
+          "ungrounded_numbers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ungrounded Numbers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "answer",
+          "tool_calls",
+          "ungrounded_numbers",
+          "grounded"
+        ],
+        "title": "AskResponse",
+        "type": "object"
+      },
+      "AssistantStatusResponse": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "provider",
+          "model",
+          "tools"
+        ],
+        "title": "AssistantStatusResponse",
+        "type": "object"
+      },
       "AuditAction": {
         "enum": [
           "LOGIN_SUCCESS",
@@ -2556,6 +2644,36 @@
         "title": "TokenResponse",
         "type": "object"
       },
+      "ToolRunResponse": {
+        "properties": {
+          "arguments": {
+            "additionalProperties": true,
+            "title": "Arguments",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "arguments",
+          "ok",
+          "result"
+        ],
+        "title": "ToolRunResponse",
+        "type": "object"
+      },
       "TransactionResponse": {
         "properties": {
           "created_at": {
@@ -3023,6 +3141,80 @@
         "summary": "Inventory Reconciliation",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/api/v1/assistant/ask": {
+      "post": {
+        "description": "Answer from read-only tools run as the caller; 503 ASSISTANT_DISABLED without a key.",
+        "operationId": "ask_api_v1_assistant_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AskResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ask",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
+    "/api/v1/assistant/status": {
+      "get": {
+        "description": "Whether the assistant is configured; the UI hides it otherwise.",
+        "operationId": "assistant_status_api_v1_assistant_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Assistant Status",
+        "tags": [
+          "assistant"
         ]
       }
     },

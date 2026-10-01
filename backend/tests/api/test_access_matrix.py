@@ -64,6 +64,9 @@ ENDPOINT_ACCESS: dict[tuple[str, str], AccessRule] = {
     ("GET", "/api/v1/inventory/transactions"): perm(Permission.INVENTORY_READ),
     ("GET", "/api/v1/admin/inventory-reconciliation"): perm(Permission.AUDIT_READ),
     ("GET", "/api/v1/audit-logs"): perm(Permission.AUDIT_READ),
+    # Phase 9: any signed-in user may ask; each tool checks its own permission (BR-AI-02).
+    ("GET", "/api/v1/assistant/status"): AUTHENTICATED,
+    ("POST", "/api/v1/assistant/ask"): AUTHENTICATED,
     ("GET", "/api/v1/production-orders"): perm(Permission.ORDER_READ),
     ("GET", "/api/v1/production-orders/{order_id}"): perm(Permission.ORDER_READ),
     ("GET", "/api/v1/production-orders/{order_id}/materials"): perm(Permission.ORDER_READ),
@@ -238,6 +241,8 @@ PROTECTED_CALLS: list[Call] = [
     Call("GET", "/api/v1/inventory/transactions"),
     Call("GET", "/api/v1/admin/inventory-reconciliation"),
     Call("GET", "/api/v1/audit-logs"),
+    Call("GET", "/api/v1/assistant/status"),
+    Call("POST", "/api/v1/assistant/ask", json=lambda n: {"question": f"Câu hỏi {n}?"}),
     Call("GET", "/api/v1/production-orders"),
     Call("GET", "/api/v1/production-orders/{order_id}", worker_scoped=True),
     Call("GET", "/api/v1/production-orders/{order_id}/materials", worker_scoped=True),

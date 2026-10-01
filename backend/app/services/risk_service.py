@@ -1,13 +1,14 @@
 """Order risk for the dashboard (B9, D-24): every open order assessed at one ``now``."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.clock import Clock
+from app.core.config import Settings
 from app.db.transaction import transaction
 from app.domain import progress
 from app.domain.operations import OperationStatus
@@ -102,3 +103,12 @@ class RiskService:
             current_operation=current_view,
             message=message(assessment, facts),
         )
+
+
+def risk_thresholds(settings: Settings) -> RiskThresholds:
+    """D-24: the thresholds are configuration, not code."""
+    return RiskThresholds(
+        gap=settings.risk_gap,
+        due_soon=timedelta(hours=settings.due_soon_hours),
+        shortage_alert=timedelta(days=settings.shortage_alert_days),
+    )

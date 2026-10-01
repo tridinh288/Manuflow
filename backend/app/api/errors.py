@@ -30,6 +30,7 @@ STATUS_BY_CATEGORY: dict[ErrorCategory, int] = {
     ErrorCategory.CONFLICT: 409,
     ErrorCategory.VALIDATION: 422,
     ErrorCategory.CONCURRENCY: 503,
+    ErrorCategory.UNAVAILABLE: 503,
 }
 
 _CODE_BY_HTTP_STATUS: dict[int, str] = {

@@ -67,8 +67,12 @@ def served(app: FastAPI) -> set[tuple[str, str]]:
     }
 
 
+# B17 adds the Phase 9 assistant without fixing its paths in the B13 table.
+EXTENSIONS = {("GET", "/assistant/status"), ("POST", "/assistant/ask")}
+
+
 def test_b13_router_serves_exactly_the_spec_endpoint_table(app: FastAPI) -> None:
-    spec = parse(endpoint_rows(spec_text()))
+    spec = parse(endpoint_rows(spec_text())) | EXTENSIONS
     assert len(spec) >= 50  # the parser really read the table
     assert sorted(spec - served(app)) == []  # in the spec, missing in code
     assert sorted(served(app) - spec) == []  # in code, not in the spec

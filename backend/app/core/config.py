@@ -35,6 +35,16 @@ class Settings(BaseSettings):
 
     idempotency_ttl_hours: int = Field(default=24, gt=0)
 
+    # Phase 9 assistant (B17): provider and model are configuration; without a key the
+    # assistant is off and the rest of the system is unaffected.
+    # "anthropic" needs ASSISTANT_API_KEY; "ollama" is a free local model (no key) reached
+    # through Ollama's OpenAI-compatible API at ASSISTANT_BASE_URL.
+    assistant_provider: Literal["anthropic", "ollama"] = "anthropic"
+    assistant_api_key: SecretStr | None = None
+    assistant_model: str = Field(default="claude-sonnet-5", min_length=1, max_length=100)
+    assistant_base_url: str = "http://host.docker.internal:11434/v1"
+    assistant_max_steps: int = Field(default=6, ge=1, le=12)
+
     # Risk thresholds (D-24).
     risk_gap: Decimal = Field(default=Decimal("0.20"), gt=0, lt=1)
     due_soon_hours: int = Field(default=48, gt=0)

@@ -1,17 +1,17 @@
 """Shared FastAPI dependencies."""
 
 from collections.abc import Iterator
-from datetime import timedelta
 from typing import Annotated
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.assistant.model import ChatModel
 from app.core.clock import Clock
 from app.core.config import Settings
 from app.domain.errors import AuthenticationError
-from app.domain.risk import RiskThresholds
+from app.services.assistant_service import AssistantService
 from app.services.audit_service import AuditService
 from app.services.auth_service import AuthenticatedUser, AuthService
 from app.services.bom_service import BomService
@@ -21,7 +21,7 @@ from app.services.inventory_service import InventoryService
 from app.services.master_data_service import MaterialService, ProductService, WorkCenterService
 from app.services.production_service import ProductionOrderService
 from app.services.progress_service import ProgressService
-from app.services.risk_service import RiskService
+from app.services.risk_service import RiskService, risk_thresholds
 from app.services.routing_service import RoutingService
 from app.services.user_service import UserService
 
@@ -132,12 +132,7 @@ def get_risk_service(
     clock: Annotated[Clock, Depends(get_clock)],
 ) -> RiskService:
     settings: Settings = request.app.state.settings
-    thresholds = RiskThresholds(  # D-24: configuration, not code
-        gap=settings.risk_gap,
-        due_soon=timedelta(hours=settings.due_soon_hours),
-        shortage_alert=timedelta(days=settings.shortage_alert_days),
-    )
-    return RiskService(session, clock, thresholds)
+    return RiskService(session, clock, risk_thresholds(settings))
 
 
 def get_dashboard_service(
@@ -146,3 +141,17 @@ def get_dashboard_service(
     risks: Annotated[RiskService, Depends(get_risk_service)],
 ) -> DashboardService:
     return DashboardService(session, clock, risks)
+
+
+def get_chat_model(request: Request) -> ChatModel | None:
+    model: ChatModel | None = request.app.state.chat_model
+    return model
+
+
+def get_assistant_service(
+    request: Request,
+    session: Annotated[Session, Depends(get_session)],
+    clock: Annotated[Clock, Depends(get_clock)],
+    model: Annotated[ChatModel | None, Depends(get_chat_model)],
+) -> AssistantService:
+    return AssistantService(session, clock, request.app.state.settings, model)

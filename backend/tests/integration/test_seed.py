@@ -1,47 +1,17 @@
 """B18 Phase 7 DoD: the seed builds a demo with every status, a shortage order, an
 AT_RISK order and a bottleneck, all through the API."""
 
-from collections.abc import Iterator
 from datetime import timedelta
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.clock import FixedClock
-from app.core.permissions import Role
-from app.core.security import PasswordHasher
 from app.models.inventory_transaction import InventoryTransaction
-from app.services.context import Actor, RequestContext
-from app.services.user_service import NewUser, UserService
 from seed.__main__ import business_data_present
-from seed.demo import Shop, issue_all, report, seed_demo
-
-PASSWORD = "demo-password-for-tests"
-
-
-@pytest.fixture
-def seeded(
-    db_client: TestClient, db_session: Session, clock: FixedClock
-) -> Iterator[dict[str, int]]:
-    def create_admin(username: str, password: str) -> None:
-        UserService(db_session, PasswordHasher()).create_user(
-            NewUser(
-                username=username,
-                password=password,
-                full_name="Demo Admin",
-                role=Role.ADMIN,
-                work_center_id=None,
-            ),
-            Actor(user_id=None, username="seed"),
-            RequestContext(),
-        )
-
-    now = clock.now()
-    orders = seed_demo(db_client, clock, PASSWORD, create_admin)
-    assert clock.now() == now  # the story ends at "now"
-    yield orders
+from seed.demo import Shop, issue_all, report
+from tests.integration.conftest import PASSWORD
 
 
 def get(client: TestClient, path: str, username: str = "demo.manager") -> dict:  # type: ignore[type-arg]

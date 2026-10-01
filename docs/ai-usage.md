@@ -130,6 +130,29 @@ Mỗi mục ghi: AI đã viết gì, test hoặc review nào phát hiện, sửa
 - **Bài học:** chạy toàn bộ test trước khi commit, kể cả khi thay đổi "chỉ thêm một trường"; mọi hàm danh sách cần một test với danh sách rỗng (giống mục 12).
 - **PR:** phase-8/orders-workcenter.
 
+### 17. Bộ kiểm tra "số trong câu trả lời phải có trong kết quả tool" bị lọt (Phase 9)
+
+- **AI viết:** kiểm tra BR-AI-03 bằng cách so mọi con số trong câu trả lời với các con số có trong kết quả tool.
+- **Phát hiện:** test cố tình cho model bịa "khoảng 3 ngày nữa", nhưng câu trả lời vẫn được coi là có căn cứ. Lần đầu do `material_id: 3` trong kết quả; sau khi bỏ qua các trường id thì vẫn lọt vì kết quả có đúng 3 vật tư (độ dài danh sách được tính là số đếm hợp lệ).
+- **Sửa:** bỏ qua các trường `id` / `*_id`, thêm test riêng cho điều đó, và ghi rõ trong docstring rằng đây là heuristic: bắt được số bịa, không bắt được số nhỏ trùng ngẫu nhiên. Phần đánh giá dữ kiện của từng câu trả lời do bộ đánh giá BR-AI-05 đảm nhận.
+- **Bài học:** với kiểm tra dựa trên heuristic, phải thử đúng loại đầu vào nó dễ nhầm nhất, và nói rõ giới hạn thay vì coi là đảm bảo.
+- **PR:** phase-9/assistant-backend.
+
+### 18. Đánh giá trợ lý với model miễn phí chạy trên máy (Phase 9, BR-AI-05)
+
+- **Bối cảnh:** không có API key trả phí, nên AI thêm provider `ollama` (API tương thích OpenAI) và chạy bộ 20 câu với các model Qwen đã tải sẵn trên máy chủ dự án. Kết quả từng lần nằm trong `docs/assistant-eval.md`.
+- **Kết quả:** lần 1 18/20, lần cuối **19/20** (`qwen2.5:7b`); lần chạy với `qwen3` bị dừng vì quá chậm trên máy.
+- **Lần 1 (`qwen2.5:7b`): 18/20.** Một lần thử tay trước đó với câu số 3 lại trượt, dù `temperature=0`: kết quả có dao động, nên mỗi cấu hình cần chạy nhiều lần.
+- **Lỗi do AI gây ra, bộ đánh giá phát hiện:**
+  - (a) Câu trả lời rỗng: một số model kết thúc lượt mà không trả chữ nào; service trả về chuỗi rỗng.
+  - (b) Một lượt gọi model treo 5 phút làm sập cả lần chạy. Trong API thật, lỗi này thành 500.
+  - (c) Prompt viết gộp `receipts|adjustments|issues|returns` khiến model chỉ sai endpoint (bảo "trả kho" khi người dùng muốn "nhập kho").
+  - (d) Câu 17 của bộ đề **hỏi thứ không tool nào trả lời được** ("kho còn bao nhiêu thép?"); model hỏi lại là hợp lý. Lỗi ở đề, không ở model.
+- **Sửa (tổng quát, không chỉnh theo từng câu):** nhắc model trả lời khi lượt rỗng; lỗi hoặc timeout của model trả 503 `ASSISTANT_UNAVAILABLE`, bộ đánh giá ghi lỗi theo từng câu; prompt liệt kê mỗi hành động với đúng một endpoint; mô tả tool phân biệt "nhu cầu" với "có đủ / thiếu bao nhiêu"; tool không tham số bỏ qua tham số thừa; sửa đề câu 17. Mỗi sửa đổi có test riêng.
+- **Phát hiện quan trọng nhất:** ở câu 4, `qwen2.5:7b` gọi tool *nhu cầu* thay vì *kiểm tra khả dụng* rồi báo "thiếu 1040 kg thép", trong khi thực tế chỉ thiếu 152 kg. Mọi con số đều lấy từ tool nên **bộ kiểm tra con số (BR-AI-03) vẫn chấp nhận**. Kiểm tra "số có trong kết quả tool" không đảm bảo câu trả lời đúng nghĩa; chỉ bộ đánh giá theo dữ kiện mới bắt được.
+- **Bài học:** đánh giá LLM phải chạy lặp lại và đọc từng câu trả lời, không chỉ nhìn tỷ lệ đạt; một phần lỗi tìm ra là lỗi của hệ thống bao quanh model (service, prompt, chính bộ đề).
+- **PR:** phase-9/assistant-backend.
+
 ## Rà soát đặc tả
 
 Ở bước rà soát (B20), AI tìm ra 10 điểm mâu thuẫn hoặc còn thiếu trong `docs/requirements.md`. Các điểm này được ghi lại cùng quyết định đã duyệt trong [`decisions.md`](decisions.md).

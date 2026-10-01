@@ -48,6 +48,7 @@ from app.models.routing import Routing, RoutingStep
 from app.models.user import User
 from app.models.warehouse import DEFAULT_WAREHOUSE_CODE, Warehouse
 from app.models.work_center import WorkCenter
+from tests.assistant_fakes import ScriptedChatModel
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 TEST_JWT_SECRET = "test-only-jwt-secret-0123456789abcdef"
@@ -92,7 +93,10 @@ def clock() -> FixedClock:
 
 @pytest.fixture
 def app(settings: Settings, clock: FixedClock) -> FastAPI:
-    return create_app(settings, clock=clock)
+    application = create_app(settings, clock=clock)
+    # Phase 9: tests never call a real LLM; tests that need a script set their own.
+    application.state.chat_model = ScriptedChatModel()
+    return application
 
 
 @pytest.fixture
