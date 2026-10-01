@@ -30,6 +30,8 @@ class AuditAction(StrEnum):
     ROUTING_ACTIVATED = "ROUTING_ACTIVATED"
     INVENTORY_RECEIVE = "INVENTORY_RECEIVE"
     INVENTORY_ADJUSTMENT = "INVENTORY_ADJUSTMENT"
+    ORDER_CREATED = "ORDER_CREATED"
+    ORDER_UPDATED = "ORDER_UPDATED"
 
 
 class AuditEntity(StrEnum):
@@ -40,6 +42,7 @@ class AuditEntity(StrEnum):
     BOM = "bom"
     ROUTING = "routing"
     INVENTORY_TRANSACTION = "inventory_transaction"
+    PRODUCTION_ORDER = "production_order"
 
 
 def is_sensitive_key(key: str) -> bool:

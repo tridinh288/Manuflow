@@ -10,7 +10,7 @@ import itertools
 import logging
 import os
 from collections.abc import Callable, Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -39,6 +39,7 @@ from app.domain.errors import (
 from app.main import create_app
 from app.models.bom import BomHeader, BomItem
 from app.models.master_data import Inventory, Material, Product
+from app.models.production import ProductionOrder
 from app.models.routing import Routing, RoutingStep
 from app.models.user import User
 from app.models.warehouse import DEFAULT_WAREHOUSE_CODE, Warehouse
@@ -174,6 +175,32 @@ MaterialFactory = Callable[..., Material]
 WorkCenterFactory = Callable[..., WorkCenter]
 BomFactory = Callable[..., BomHeader]
 RoutingFactory = Callable[..., Routing]
+OrderFactory = Callable[..., ProductionOrder]
+
+
+@pytest.fixture
+def order_factory(db_session: Session, clock: FixedClock) -> OrderFactory:
+    """A production order in any status, bypassing the service (for setting up states)."""
+    sequence = itertools.count(1)
+
+    def create(
+        product: Product,
+        *,
+        status: str = "DRAFT",
+        planned_quantity: int = 10,
+        number: str | None = None,
+    ) -> ProductionOrder:
+        order = ProductionOrder(
+            order_number=number or f"PO-TEST-{next(sequence):05d}",
+            product_id=product.id,
+            planned_quantity=planned_quantity,
+            due_date=clock.now() + timedelta(days=7),
+            status=status,
+        )
+        insert(db_session, order)
+        return order
+
+    return create
 
 
 @pytest.fixture

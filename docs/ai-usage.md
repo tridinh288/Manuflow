@@ -63,6 +63,13 @@ Mỗi mục ghi: AI đã viết gì, test hoặc review nào phát hiện, sửa
 - **Sửa:** thêm test sửa lén `reserved_quantity`, khẳng định có dòng lệch. Phá lại: fail; khôi phục: pass. Cùng lúc thêm trường hợp vật tư chưa có dòng sổ cái nào (bắt lỗi thiếu `COALESCE`).
 - **PR:** phase-4/inventory-reads-reconciliation.
 
+### 9. Hạn giao hàng không được quy về UTC (Phase 5)
+
+- **AI viết:** service tạo lệnh lưu `due_date` đúng như đối tượng nhận từ request. DB lưu đúng giá trị UTC nhờ `UTCDateTime`, nhưng response được dựng từ chính đối tượng đó nên trả `2026-10-02T15:00:00+07:00`, trái với D-23 (mọi thời gian theo UTC).
+- **Phát hiện bởi:** test `test_d23_due_date_is_stored_in_utc`, viết cùng lúc với tính năng, fail ở lần chạy đầu.
+- **Sửa:** chuẩn hóa `astimezone(UTC)` ngay trong service, cả khi tạo lẫn khi sửa. Cố tình bỏ chuẩn hóa → test fail.
+- **PR:** phase-5/orders-state-machine.
+
 ## Rà soát đặc tả
 
 Ở bước rà soát (B20), AI tìm ra 10 điểm mâu thuẫn hoặc còn thiếu trong `docs/requirements.md`. Các điểm này được ghi lại cùng quyết định đã duyệt trong [`decisions.md`](decisions.md).

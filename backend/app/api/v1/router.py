@@ -8,12 +8,26 @@ from app.api.v1 import (
     bom,
     inventory,
     materials,
+    production_orders,
     products,
     routing,
     users,
     work_centers,
 )
 
+FEATURE_ROUTERS = (
+    auth,
+    users,
+    products,
+    materials,
+    work_centers,
+    bom,
+    routing,
+    inventory,
+    production_orders,
+    admin,
+)
+
 api_router = APIRouter()
-for module in (auth, users, products, materials, work_centers, bom, routing, inventory, admin):
+for module in FEATURE_ROUTERS:
     api_router.include_router(module.router)

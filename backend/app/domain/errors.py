@@ -9,7 +9,7 @@ from enum import StrEnum
 from typing import ClassVar
 
 # Quantities go into details as strings, never floats (B13).
-ErrorDetail = Mapping[str, str | int | None]
+ErrorDetail = Mapping[str, str | int | list[str] | None]
 
 
 class ErrorCategory(StrEnum):
