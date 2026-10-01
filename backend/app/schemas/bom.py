@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from app.domain.bom import VersionStatus
 from app.domain.explode import MaterialRequirement
 from app.domain.quantities import MAX_DECIMAL_PLACES, format_quantity
+from app.schemas.common import MAX_ID
 from app.services.bom_service import BomView
 
 # Decimals as strings (B13); BR-BOM-01 ranges are checked by the domain.
@@ -16,7 +17,7 @@ DecimalString = Annotated[str, StringConstraints(pattern=r"^\d{1,14}(\.\d{1,4})?
 class BomItemRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    material_id: int = Field(gt=0)
+    material_id: int = Field(gt=0, le=MAX_ID)
     qty_per_unit: DecimalString
     scrap_rate: DecimalString = "0"
 
@@ -75,7 +76,7 @@ class ExplodeRequest(BaseModel):
     # Validated by the domain so every wrong value gets 422 INVALID_QUANTITY (B5):
     # 0, -1, 1.5, "100" and true are all rejected, not coerced.
     quantity: Any
-    bom_header_id: int | None = Field(default=None, gt=0)
+    bom_header_id: int | None = Field(default=None, gt=0, le=MAX_ID)
 
 
 class MaterialRequirementResponse(BaseModel):

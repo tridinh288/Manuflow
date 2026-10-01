@@ -95,6 +95,14 @@ Mỗi mục ghi: AI đã viết gì, test hoặc review nào phát hiện, sửa
 - **Bài học:** mỗi phép so sánh cần một test ngay tại biên, và mỗi `all()` cần một test với danh sách rỗng.
 - **PR:** phase-6/bottlenecks-alerts-dashboard.
 
+### 13. Test quét pass vì không quét được gì (Phase 7)
+
+- **AI viết:** test duyệt mọi model request để kiểm tra giới hạn input, dùng `app.routes`. Test pass ngay lần đầu.
+- **Phát hiện:** pass ngay lần đầu là dấu hiệu đáng ngờ, nên AI in ra số model quét được: **0**. FastAPI 0.14x gói router con vào `_IncludedRouter`, nên `app.routes` không còn chứa route API. Test ma trận quyền đã gặp đúng chuyện này ở phase trước và dùng `iter_route_contexts`; AI không dùng lại.
+- **Sửa:** dùng `iter_route_contexts` và thêm khẳng định "quét được ít nhất 15 model". Bản quét thật tìm ra 9 trường ID không có cận trên. Thử thêm bằng tay lộ ra `offset` quá lớn gây lỗi 500, và log lỗi DB có thể chứa hash mật khẩu. Cả ba đã sửa, xem `docs/security-review.md`.
+- **Bài học:** test dạng "duyệt tất cả rồi khẳng định danh sách lỗi rỗng" phải khẳng định luôn rằng nó đã duyệt được thứ gì đó.
+- **PR:** phase-7/security-review.
+
 ## Rà soát đặc tả
 
 Ở bước rà soát (B20), AI tìm ra 10 điểm mâu thuẫn hoặc còn thiếu trong `docs/requirements.md`. Các điểm này được ghi lại cùng quyết định đã duyệt trong [`decisions.md`](decisions.md).
