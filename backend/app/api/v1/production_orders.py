@@ -8,6 +8,7 @@ from app.api.deps import get_production_order_service, get_request_context
 from app.api.idempotency import OptionalIdempotency, RequiredIdempotency
 from app.core.permissions import Permission
 from app.schemas.production import (
+    CancelRequest,
     OrderCreateRequest,
     OrderResponse,
     OrderUpdateRequest,
@@ -28,6 +29,8 @@ router = APIRouter(prefix="/production-orders", tags=["production orders"])
 Creator = Annotated[AuthenticatedUser, Depends(require(Permission.ORDER_CREATE))]
 Planner = Annotated[AuthenticatedUser, Depends(require(Permission.ORDER_PLAN))]
 Checker = Annotated[AuthenticatedUser, Depends(require(Permission.ORDER_CHECK_MATERIALS))]
+Starter = Annotated[AuthenticatedUser, Depends(require(Permission.ORDER_START))]
+Canceller = Annotated[AuthenticatedUser, Depends(require(Permission.ORDER_CANCEL))]
 Service = Annotated[ProductionOrderService, Depends(get_production_order_service)]
 Context = Annotated[RequestContext, Depends(get_request_context)]
 
@@ -119,5 +122,48 @@ def check_materials(
         user=user,
         payload=None,
         operation=lambda: service.check_materials(order_id, user.actor, context),
+        to_response=to_response,
+    )
+
+
+@router.post("/{order_id}/start", response_model=OrderResponse)
+def start_order(
+    order_id: int,
+    user: Starter,
+    service: Service,
+    context: Context,
+    idempotent: OptionalIdempotency,
+) -> JSONResponse:
+    """D-11: READY_TO_PRODUCE -> IN_PROGRESS once every material is issued in full."""
+
+    def to_response(view: OrderView) -> OrderResponse:
+        return OrderResponse.of(view, user.permissions)
+
+    return idempotent.respond(
+        user=user,
+        payload=None,
+        operation=lambda: service.start(order_id, user.actor, context),
+        to_response=to_response,
+    )
+
+
+@router.post("/{order_id}/cancel", response_model=OrderResponse)
+def cancel_order(
+    order_id: int,
+    body: CancelRequest,
+    user: Canceller,
+    service: Service,
+    context: Context,
+    idempotent: RequiredIdempotency,
+) -> JSONResponse:
+    """D-13: cancel before production starts; releases reservations (C-04: key required)."""
+
+    def to_response(view: OrderView) -> OrderResponse:
+        return OrderResponse.of(view, user.permissions)
+
+    return idempotent.respond(
+        user=user,
+        payload=body,
+        operation=lambda: service.cancel(order_id, body.reason, user.actor, context),
         to_response=to_response,
     )

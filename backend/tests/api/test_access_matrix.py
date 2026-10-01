@@ -69,6 +69,8 @@ ENDPOINT_ACCESS: dict[tuple[str, str], AccessRule] = {
     ("POST", "/api/v1/production-orders/{order_id}/check-materials"): perm(
         Permission.ORDER_CHECK_MATERIALS
     ),
+    ("POST", "/api/v1/production-orders/{order_id}/start"): perm(Permission.ORDER_START),
+    ("POST", "/api/v1/production-orders/{order_id}/cancel"): perm(Permission.ORDER_CANCEL),
     ("POST", "/api/v1/inventory/issues"): perm(Permission.INVENTORY_ISSUE),
     ("POST", "/api/v1/inventory/returns"): perm(Permission.INVENTORY_RETURN),
 }
@@ -239,6 +241,17 @@ PROTECTED_CALLS: list[Call] = [
     ),
     Call(
         "POST",
+        "/api/v1/production-orders/{order_id}/start",
+        params=(("order_id", "startable_order_id"),),
+    ),
+    Call(
+        "POST",
+        "/api/v1/production-orders/{order_id}/cancel",
+        json=lambda n: {"reason": f"Matrix {n}"},
+        idempotency_key=True,
+    ),
+    Call(
+        "POST",
         "/api/v1/inventory/issues",
         json=lambda n: {"order_material_id": -1, "quantity": "1"},
         idempotency_key=True,
@@ -288,6 +301,8 @@ def targets(
         # product (C-13).
         "order_id": order_factory(plannable).id,
         "shortage_order_id": order_factory(plannable, status="MATERIAL_SHORTAGE").id,
+        # READY with no material lines: nothing left to issue, so start is allowed.
+        "startable_order_id": order_factory(plannable, status="READY_TO_PRODUCE").id,
         "ready_line_id": order_line_factory(
             order_factory(plannable, status="READY_TO_PRODUCE"),
             material_factory(),

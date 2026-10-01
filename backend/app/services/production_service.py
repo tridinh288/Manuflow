@@ -22,6 +22,7 @@ from app.domain.explode import validate_order_quantity
 from app.domain.inventory import TransactionType
 from app.domain.operations import OperationStatus
 from app.domain.order_state import OrderAction, OrderStatus, ensure_allowed, transition
+from app.domain.quantities import format_quantity
 from app.domain.reservation import RequiredLine, decide
 from app.models.master_data import Product
 from app.models.production import (
@@ -259,6 +260,100 @@ class ProductionOrderService:
             )
             product = self._product(order)
         return ReservationResult(OrderView(order, product), checks)
+
+    def start(self, order_id: int, actor: Actor, context: RequestContext) -> OrderView:
+        """D-11: READY_TO_PRODUCE -> IN_PROGRESS only once every line is fully issued."""
+        with transaction(self._session):
+            order = self._lock(order_id)
+            before = OrderStatus(order.status)
+            ensure_allowed(before, OrderAction.START)
+            lines = self._orders.lines_for_order(order.id)
+            missing = [line for line in lines if line.issued_quantity < line.required_quantity]
+            if missing:
+                stock = InventoryRepository(self._session)
+                materials = stock.materials_by_id([line.material_id for line in missing])
+                raise ConflictError(
+                    "MATERIALS_NOT_FULLY_ISSUED",
+                    "Every material must be issued in full before production starts.",
+                    [
+                        {
+                            "material_code": materials[line.material_id].material_code,
+                            "required": format_quantity(
+                                line.required_quantity, materials[line.material_id].decimal_places
+                            ),
+                            "issued": format_quantity(
+                                line.issued_quantity, materials[line.material_id].decimal_places
+                            ),
+                        }
+                        for line in missing
+                    ],
+                )
+            after = transition(before, OrderAction.START, OrderStatus.IN_PROGRESS)
+            order.status = after.value
+            order.started_at = self._clock.now()
+            self._session.flush()
+            self._audit_status(AuditAction.ORDER_STARTED, order, before, after, actor, context, {})
+            product = self._product(order)
+        return OrderView(order, product)
+
+    def cancel(
+        self, order_id: int, reason: str, actor: Actor, context: RequestContext
+    ) -> OrderView:
+        """D-13: from DRAFT, MATERIAL_SHORTAGE or READY_TO_PRODUCE. Releases what is still
+        reserved (one RELEASE line per material), cancels the operations; issued material
+        stays issued until the warehouse returns it (C-05).
+
+        Lock order (B12): order row -> balance rows by ascending material_id.
+        """
+        with transaction(self._session):
+            order = self._lock(order_id)
+            before = OrderStatus(order.status)
+            ensure_allowed(before, OrderAction.CANCEL)
+            lines = [
+                line for line in self._orders.lines_for_order(order.id) if line.reserved_quantity
+            ]
+            stock = InventoryRepository(self._session)
+            material_ids = sorted(line.material_id for line in lines)
+            materials = stock.materials_by_id(material_ids)
+            rows = stock.lock_balances(material_ids)
+            ledger = InventoryService(self._session)
+            released: dict[str, str] = {}
+            for line in sorted(lines, key=lambda line: line.material_id):
+                material, row = materials[line.material_id], rows[line.material_id]
+                movement = inventory.release(balance_of(row), line.reserved_quantity)
+                ledger.record_movement(
+                    row,
+                    material,
+                    movement,
+                    TransactionType.RELEASE,
+                    actor,
+                    context,
+                    reason=reason,
+                    production_order_id=order.id,
+                    order_material_id=line.id,
+                )
+                released[material.material_code] = format_quantity(
+                    line.reserved_quantity, material.decimal_places
+                )
+                line.reserved_quantity = Decimal(0)
+            for operation in self._orders.operations_for_order(order.id):
+                operation.status = OperationStatus.CANCELLED.value
+            after = transition(before, OrderAction.CANCEL, OrderStatus.CANCELLED)
+            order.status = after.value
+            order.cancel_reason = reason
+            self._session.flush()
+            self._audit.record(
+                action=AuditAction.ORDER_CANCELLED,
+                entity_type=AuditEntity.PRODUCTION_ORDER,
+                entity_id=order.id,
+                actor=actor,
+                context=context,
+                old_value={"status": before.value},
+                new_value={"status": after.value, "released": released},
+                reason=reason,
+            )
+            product = self._product(order)
+        return OrderView(order, product)
 
     def _reserve(
         self,

@@ -88,6 +88,13 @@ def reserve(balance: Balance, quantity: Decimal) -> Movement:
     return Movement(on_hand_delta=Decimal(0), reserved_delta=quantity, after=after)
 
 
+def release(balance: Balance, quantity: Decimal) -> Movement:
+    """RELEASE: give back what an order still reserves; reserved -q (B6, D-13)."""
+    after = Balance(balance.on_hand, balance.reserved - quantity)
+    _ensure_representable(after)
+    return Movement(on_hand_delta=Decimal(0), reserved_delta=-quantity, after=after)
+
+
 def issue(balance: Balance, quantity: Decimal) -> Movement:
     """ISSUE: hand reserved stock to production; on_hand -q and reserved -q (D-10)."""
     after = Balance(balance.on_hand - quantity, balance.reserved - quantity)
