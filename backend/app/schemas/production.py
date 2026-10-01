@@ -15,9 +15,15 @@ from app.core.permissions import Permission
 from app.domain.order_state import OrderStatus, allowed_actions
 from app.domain.quantities import format_quantity
 from app.models.master_data import Material
-from app.models.production import ProductionOperation, ProductionOrderMaterial
-from app.models.work_center import WorkCenter
-from app.services.production_service import MaterialCheck, OrderView, ReservationResult
+from app.models.production import ProductionOrderMaterial
+from app.schemas.dashboard import ratio
+from app.services.production_service import (
+    MaterialCheck,
+    OperationMetrics,
+    OperationsView,
+    OrderView,
+    ReservationResult,
+)
 
 
 class OrderCreateRequest(BaseModel):
@@ -184,9 +190,12 @@ class OperationResponse(BaseModel):
     rejected_quantity: int
     started_at: datetime | None
     completed_at: datetime | None
+    progress: float  # B8: 1 when COMPLETED, otherwise processed / planned
+    yield_rate: float | None  # good / processed
 
     @classmethod
-    def of(cls, operation: ProductionOperation, center: WorkCenter) -> "OperationResponse":
+    def of(cls, metrics: OperationMetrics) -> "OperationResponse":
+        operation, center = metrics.operation, metrics.work_center
         return cls(
             id=operation.id,
             sequence=operation.sequence,
@@ -198,4 +207,22 @@ class OperationResponse(BaseModel):
             rejected_quantity=operation.rejected_quantity,
             started_at=operation.started_at,
             completed_at=operation.completed_at,
+            progress=ratio(metrics.progress),
+            yield_rate=ratio(metrics.yield_rate) if metrics.yield_rate is not None else None,
+        )
+
+
+class OperationsResponse(BaseModel):
+    items: list[OperationResponse]
+    total: int
+    workflow_progress: float  # mean of operation progresses (used by risk, B9)
+    finished_progress: float  # good(last) / planned
+
+    @classmethod
+    def of(cls, view: OperationsView) -> "OperationsResponse":
+        return cls(
+            items=[OperationResponse.of(row) for row in view.rows],
+            total=len(view.rows),
+            workflow_progress=ratio(view.workflow_progress),
+            finished_progress=ratio(view.finished_progress),
         )

@@ -6,7 +6,9 @@ This project is a student/personal simulation of an internal manufacturing manag
 > (foundation; authentication, permissions, audit and idempotency; master data, BOMs and
 > routings; inventory ledger; production orders with reservation, issue, start and
 > cancel). Phase 6 so far: progress reports per operation with scrap, corrections,
-> cascading completion and automatic order completion.
+> cascading completion and automatic order completion; progress figures per operation
+> and order, and order risk on `GET /dashboard/risks` (overdue, material shortage, not
+> started yet due soon, behind schedule).
 
 ## Quick start
 

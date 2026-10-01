@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.clock import Clock
 from app.db.transaction import transaction
-from app.domain import inventory
+from app.domain import inventory, progress
 from app.domain.audit import AuditAction, AuditEntity, changed_fields
 from app.domain.errors import BusinessValidationError, ConflictError, NotFoundError
 from app.domain.explode import validate_order_quantity
@@ -65,6 +65,32 @@ class OrderUpdate:
 class OrderView:
     order: ProductionOrder
     product: Product
+
+
+@dataclass(frozen=True)
+class OperationMetrics:
+    operation: ProductionOperation
+    work_center: WorkCenter
+    progress: Decimal
+    yield_rate: Decimal | None
+
+
+@dataclass(frozen=True)
+class OperationsView:
+    """Operations with the B8 progress figures (one definition for API and dashboard)."""
+
+    rows: list[OperationMetrics]
+    workflow_progress: Decimal
+    finished_progress: Decimal
+
+
+def _state(operation: ProductionOperation) -> progress.OperationState:
+    return progress.OperationState(
+        operation.sequence,
+        OperationStatus(operation.status),
+        operation.good_quantity,
+        operation.rejected_quantity,
+    )
 
 
 @dataclass(frozen=True)
@@ -127,13 +153,29 @@ class ProductionOrderService:
             self._visible(order_id, scope)
             return list(self._orders.lines_with_materials(order_id))
 
-    def list_operations(
-        self, order_id: int, scope: int | None
-    ) -> list[tuple[ProductionOperation, WorkCenter]]:
-        """A WORKER sees only the operations at their own work center (D-18)."""
+    def list_operations(self, order_id: int, scope: int | None) -> "OperationsView":
+        """A WORKER sees only the operations at their own work center (D-18); the order's
+        progress is computed over every operation all the same (B8)."""
         with transaction(self._session):
-            self._visible(order_id, scope)
-            return list(self._orders.operations_with_work_centers(order_id, scope))
+            order, _ = self._visible(order_id, scope)
+            visible = self._orders.operations_with_work_centers(order_id, scope)
+            every = self._orders.operations_for_order(order_id)
+        planned = order.planned_quantity
+        states = {op.id: _state(op) for op in every}
+        ordered = [states[op.id] for op in every]
+        return OperationsView(
+            rows=[
+                OperationMetrics(
+                    operation=op,
+                    work_center=center,
+                    progress=progress.operation_progress(states[op.id], planned),
+                    yield_rate=progress.yield_rate(states[op.id]),
+                )
+                for op, center in visible
+            ],
+            workflow_progress=progress.workflow_progress(ordered, planned),
+            finished_progress=progress.finished_progress(ordered, planned),
+        )
 
     def _visible(self, order_id: int, scope: int | None) -> tuple[ProductionOrder, Product]:
         found = self._orders.get_in_scope(order_id, scope)

@@ -77,6 +77,16 @@ Mỗi mục ghi: AI đã viết gì, test hoặc review nào phát hiện, sửa
 - **Sửa:** không viết lại lịch sử đã push. Thêm commit sửa định dạng ngay sau đó, chạy lại mọi cổng kiểm tra với mã thoát thật (791 passed, exit 0) trước khi mở PR. Skill `git-pr-workflow` (B1) được bổ sung: không nối cổng kiểm tra qua pipe trước `&&`.
 - **PR:** phase-5/issue-and-return.
 
+### 11. Ví dụ mẫu trong đặc tả không đủ để kiểm quy tắc (Phase 6)
+
+- **AI viết:** test tiến độ và rủi ro dựa gần như hoàn toàn vào ví dụ B8/B9. Cố tình phá code cho thấy hai cài đặt sai vẫn qua:
+  - (a) tính tiến độ công đoạn đã xong bằng `processed / planned` thay vì 1: ở B8, hai công đoạn đã xong tình cờ có `processed = 100`;
+  - (b) bỏ sắp xếp theo mức nghiêm trọng: trong test, lệnh quá hạn vốn có hạn sớm hơn.
+- **Cũng trong PR này:** test API ban đầu ghép khung thời gian của B9 (tỷ lệ 0,81) với tiến độ 0,66 của B8, ra chênh lệch 0,15 nên đúng ra là ON_TRACK. Kỳ vọng của test sai, không phải code. AI cũng lặp lại cái bẫy token 30 phút hết hạn sau khi đẩy đồng hồ (đã gặp ở D-21).
+- **Sửa:** thêm test công đoạn đã xong sau khi phía trước có hàng lỗi (tiến độ vẫn là 1), và test lệnh AT_RISK có hạn muộn hơn lệnh ON_TRACK. Phá lại: cả hai fail.
+- **Bài học:** ví dụ trong đặc tả là điểm khởi đầu; mỗi quy tắc cần ít nhất một test mà ở đó cài đặt sai cho kết quả **khác** cài đặt đúng.
+- **PR:** phase-6/progress-metrics-risk.
+
 ## Rà soát đặc tả
 
 Ở bước rà soát (B20), AI tìm ra 10 điểm mâu thuẫn hoặc còn thiếu trong `docs/requirements.md`. Các điểm này được ghi lại cùng quyết định đã duyệt trong [`decisions.md`](decisions.md).
