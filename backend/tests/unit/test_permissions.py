@@ -1,5 +1,7 @@
 """B4 / D-17: the permission matrix in code matches the specification table exactly."""
 
+import re
+
 import pytest
 
 from app.core.permissions import ROLE_PERMISSIONS, Permission, Role, has_permission
@@ -57,3 +59,21 @@ def test_b4_admin_cannot_move_stock_or_report_production() -> None:
         Permission.OPERATION_CORRECT,
     }
     assert not forbidden & ROLE_PERMISSIONS[Role.ADMIN]
+
+
+def test_b4_transcribed_matrix_equals_the_spec_file() -> None:
+    """SPEC_MATRIX above is a copy; this reads the B4 table itself so the two cannot drift."""
+    from tests.unit.test_spec_endpoints import spec_text
+
+    text = spec_text()
+    table = text[text.index("### Ma trận quyền") :]
+    lines = [line for line in table.split("\n\n")[1].splitlines() if line.startswith("|")]
+    roles = [ADMIN, PM, WH, WORKER]
+    parsed: dict[str, set[Role]] = {}
+    for line in lines[2:]:
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        granted = {role for role, cell in zip(roles, cells[1:], strict=True) if cell != "—"}
+        for permission in re.findall(r"`([a-z_]+:[a-z_]+)`", cells[0]):
+            parsed[permission] = granted
+    assert len(parsed) == len(SPEC_MATRIX) == 20
+    assert parsed == SPEC_MATRIX

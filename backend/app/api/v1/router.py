@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     admin,
+    audit,
     auth,
     bom,
     dashboard,
@@ -30,6 +31,7 @@ FEATURE_ROUTERS = (
     operations,
     dashboard,
     admin,
+    audit,
 )
 
 api_router = APIRouter()

@@ -1,13 +1,15 @@
 """Audit rows are written inside the caller's business transaction (BR-AUD-02)."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.db.transaction import transaction
 from app.domain.audit import AuditAction, AuditEntity, to_audit_payload
+from app.domain.errors import BusinessValidationError
 from app.models.audit_log import AuditLog
-from app.repositories.audit_log_repository import AuditLogRepository
+from app.repositories.audit_log_repository import AuditFilter, AuditLogRepository
 from app.services.context import Actor, RequestContext
 
 _MAX_USERNAME = 64
@@ -52,3 +54,18 @@ class AuditService:
             ip_address=context.ip_address,
         )
         return self._repository.add(entry)
+
+    def list_logs(
+        self, filters: AuditFilter, limit: int, offset: int
+    ) -> tuple[Sequence[AuditLog], int]:
+        """BR-AUD-06: newest first, filtered by entity, actor, action and time range."""
+        if (
+            filters.created_from is not None
+            and filters.created_to is not None
+            and filters.created_from >= filters.created_to
+        ):
+            raise BusinessValidationError(
+                "INVALID_DATE_RANGE", "created_from must be earlier than created_to."
+            )
+        with transaction(self._session):
+            return self._repository.list(filters, limit, offset)
