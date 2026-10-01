@@ -13,8 +13,6 @@ from fastapi.routing import APIRoute, iter_route_contexts
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
-from app.main import create_app
-
 
 def request_models(app: FastAPI) -> set[type[BaseModel]]:
     found: set[type[BaseModel]] = set()
@@ -82,9 +80,8 @@ def _check(
     return []  # bool, enums, Literal, datetime, SecretStr-free types
 
 
-def test_b16_every_request_field_has_an_explicit_limit() -> None:
+def test_b16_every_request_field_has_an_explicit_limit(app: FastAPI) -> None:
     seen: set[type[BaseModel]] = set()
-    app = create_app()
     assert len(request_models(app)) >= 15  # the scan really sees the API
     found = [
         p
@@ -110,10 +107,10 @@ def test_b16_scan_flags_unbounded_fields() -> None:
     ]
 
 
-def test_b16_request_models_reject_unknown_fields() -> None:
+def test_b16_request_models_reject_unknown_fields(app: FastAPI) -> None:
     """Untrusted input: a client cannot smuggle status, role or computed totals."""
     seen: set[type[BaseModel]] = set()
-    for model in request_models(create_app()):
+    for model in request_models(app):
         problems(model, seen)  # collects nested models too
     lenient = sorted(m.__name__ for m in seen if m.model_config.get("extra") != "forbid")
     assert lenient == []
