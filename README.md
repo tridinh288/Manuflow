@@ -2,69 +2,164 @@
 
 This project is a student/personal simulation of an internal manufacturing management system. It models common workflows such as BOM management, material planning, inventory reservation, production planning, and workshop progress tracking. It is not a production ERP, and the author does not claim professional manufacturing experience.
 
-> Status: **Phase 6 — progress and monitoring** (done, awaiting review). Done: Phases 1–5
-> (foundation; authentication, permissions, audit and idempotency; master data, BOMs and
-> routings; inventory ledger; production orders with reservation, issue, start and
-> cancel). Phase 6: progress reports per operation with scrap, corrections, cascading
-> completion and automatic order completion; progress figures per operation and order;
-> the dashboard (`GET /dashboard/risks`, `/production`, `/bottlenecks`,
-> `/material-alerts`).
+> Status: **MVP complete (Phases 1–7)**. The React frontend (Phase 8) and the AI assistant
+> (Phase 9) are optional extensions and not started.
+
+## The workflow
+
+```mermaid
+flowchart LR
+    A[Production order<br/>DRAFT] -->|plan| B{Enough stock<br/>for every line?}
+    B -->|yes: reserve all| C[READY_TO_PRODUCE]
+    B -->|no: reserve nothing| D[MATERIAL_SHORTAGE]
+    D -->|receive stock,<br/>check-materials| B
+    C -->|issue every line,<br/>start| E[IN_PROGRESS]
+    E -->|progress per operation,<br/>last operation done| F[COMPLETED]
+    C -->|cancel: release| G[CANCELLED]
+    D -->|cancel| G
+```
+
+1. A production manager creates an order for a product; the active BOM is exploded into material needs, always rounded up (`58.8 → 59` bolts).
+2. Planning reserves every material line or none at all; a shortage reserves nothing and lists every missing quantity.
+3. The warehouse receives stock, issues reserved material to the order and takes back what was not used; every movement writes one ledger line.
+4. Workers report good and rejected units per operation, only at their own work center; an operation can never process more than the previous one passed.
+5. The dashboard flags orders at risk, work centers where at-risk work piles up, and materials below their minimum.
 
 ## Quick start
 
-Requirements: Docker Desktop (Compose v2).
+Requirements: Docker Desktop (Compose v2), `curl` and `jq` for the demo.
 
 ```bash
-cp .env.example .env          # placeholder values, fine for local development
+cp .env.example .env          # placeholder values; set SEED_DEMO_PASSWORD to your own
 docker compose up -d --build  # MySQL 8.0 + API; migrations run on API start
 curl http://localhost:8000/health
 # {"status":"ok","database":"ok"}
+
+docker compose exec api python -m seed   # demo shop with 10 days of history
 ```
 
 OpenAPI docs: <http://localhost:8000/docs>. MySQL is exposed on host port `3307`.
 
-Create the first admin (the API cannot create users without one):
+The seed only runs with `ENV=dev`, refuses a database that already holds data, and goes
+through the HTTP API with a clock that starts ten days ago, so the ledger, the audit log
+and every order state are produced exactly as in real use. Demo accounts share the
+password in `SEED_DEMO_PASSWORD`:
+
+| Account | Role | Work center |
+| --- | --- | --- |
+| `demo.admin` | ADMIN | — |
+| `demo.manager` | PRODUCTION_MANAGER | — |
+| `demo.warehouse` | WAREHOUSE | — |
+| `demo.cut`, `demo.cnc`, `demo.weld`, `demo.paint`, `demo.qc` | WORKER | WC-CUT, WC-CNC, WC-WELD, WC-PAINT, WC-QC |
+
+What the seed leaves (ids on a fresh database):
+
+| Order | Product | State | Why it is there |
+| --- | --- | --- | --- |
+| 1 | FRAME-A × 20 | COMPLETED (19 good) | one frame scrapped at QC |
+| 2 | FRAME-A × 30 | CANCELLED | reservation released |
+| 3 | FRAME-A × 60 | IN_PROGRESS, **OVERDUE** | due yesterday, still at welding |
+| 4 | FRAME-A × 100 | IN_PROGRESS, **AT_RISK** | due in 8 h, welding 40/100 |
+| 5 | BRACKET-B × 50 | IN_PROGRESS, on track | at CNC |
+| 6 | FRAME-A × 40 | READY_TO_PRODUCE | reserved, not issued |
+| 7 | FRAME-A × 400 | **MATERIAL_SHORTAGE** | short of steel only |
+| 8 | BRACKET-B × 120 | DRAFT | not planned |
+
+WC-WELD is flagged as a **bottleneck** (two at-risk orders), and STEEL-001 and BOLT-M8 are
+below their minimum stock.
+
+Without the seed, create the first admin yourself (the API cannot create one); the
+password is prompted for, never passed on the command line:
 
 ```bash
-docker compose exec -e ADMIN_PASSWORD='choose-a-long-password' api   python -m app.cli create-user --username admin --full-name "System Admin"   --role ADMIN --password-env ADMIN_PASSWORD
+docker compose exec api python -m app.cli create-user --username admin \
+    --full-name "System Admin" --role ADMIN
 ```
 
-The admin then manages users with `GET/POST /api/v1/users` and `PATCH /api/v1/users/{id}`.
-Every route declares exactly one access rule (public, authenticated, or one permission
-from the B4 matrix); a test walks the router and fails on any route that does not.
+## Five-minute demo
 
-Idempotency (D-22): mutating requests accept an `Idempotency-Key` header (8-128 chars,
-a UUID is recommended). The key row, the business change and the stored response commit
-in one transaction, so a retry or double click returns the first response with
-`Idempotent-Replayed: true` instead of repeating the change; reusing a key for a
-different request is rejected with 422. Only successful responses are stored, and keys
-expire after 24 hours (`python -m app.cli purge-idempotency-keys` reclaims the rows).
-
-Authentication: `POST /api/v1/auth/login` with `{"username", "password"}` returns a 30-minute
-bearer token; `GET /api/v1/auth/me` returns the caller, role and permissions. Five failed
-logins within 15 minutes lock the account for 15 minutes; every failure returns the same
-generic message. Audit rows are written in the same transaction as the change they
-describe, never contain passwords or tokens, and MySQL triggers reject any UPDATE or DELETE.
-
-## Tests and quality checks
+Order 7 goes from shortage to completed. The same sequence runs as a test on the seeded
+data (`tests/integration/test_seed.py::test_five_minute_demo_runs_on_the_seed`).
 
 ```bash
-docker compose exec api pytest -q                    # unit + API + integration (real MySQL)
-docker compose exec api ruff check .
-docker compose exec api ruff format --check .
-docker compose exec api mypy
+API=http://localhost:8000/api/v1
+PASSWORD=...   # the value of SEED_DEMO_PASSWORD
+token() { curl -s $API/auth/login -H 'Content-Type: application/json' \
+  -d "{\"username\":\"$1\",\"password\":\"$PASSWORD\"}" | jq -r .access_token; }
+call() { # call <user> <method> <path> [json]
+  curl -s -X "$2" "$API$3" -H "Authorization: Bearer $(token "$1")" \
+    -H 'Content-Type: application/json' -H "Idempotency-Key: demo-$(date +%s%N)" \
+    ${4:+-d "$4"}; }
+
+# 1. The shortage: every line with required, available and shortage.
+call demo.manager GET /production-orders/7/materials | jq '.items[] | {material_code, required_quantity, shortage_quantity}'
+
+# 2. Receive steel (STEEL-001 is material 1), then re-check: all lines reserved at once.
+call demo.warehouse POST /inventory/receipts '{"material_id": 1, "quantity": "200", "reference": "GRN-DEMO"}' | jq -c '{material_code, on_hand_quantity, available_quantity}'
+call demo.manager POST /production-orders/7/check-materials | jq '{status, reserved}'
+
+# 3. Issue every reserved line and start production.
+for line in $(call demo.warehouse GET /production-orders/7/materials | jq -r '.items[] | "\(.id):\(.reserved_quantity)"'); do
+  call demo.warehouse POST /inventory/issues "{\"order_material_id\": ${line%%:*}, \"quantity\": \"${line#*:}\"}" | jq -c '{material_code, on_hand_quantity}'
+done
+call demo.manager POST /production-orders/7/start | jq .status
+
+# 4. Report progress with scrap, each worker at their own station.
+ops=$(call demo.manager GET /production-orders/7/operations)
+op() { echo "$ops" | jq -r ".items[] | select(.sequence == $1) | .id"; }
+progress='{operation_type, status, good_quantity, rejected_quantity, limit}'
+call demo.cut   POST /production-operations/$(op 10)/progress '{"good_delta": 400}' | jq -c "$progress"
+call demo.weld  POST /production-operations/$(op 20)/progress '{"good_delta": 400}' | jq -c "$progress"
+call demo.paint POST /production-operations/$(op 30)/progress '{"good_delta": 398, "rejected_delta": 2}' | jq -c "$progress"
+call demo.weld  POST /production-operations/$(op 40)/progress '{"good_delta": 1}' | jq .error.code   # OPERATION_NOT_FOUND: not their station
+
+# 5. Risks and bottlenecks, then finish at QC.
+call demo.manager GET /dashboard/risks | jq '.items[] | {production_order, risk, message}'
+call demo.manager GET /dashboard/bottlenecks | jq '.items[] | select(.bottleneck)'
+call demo.qc    POST /production-operations/$(op 40)/progress '{"good_delta": 396, "rejected_delta": 2}' | jq -c "$progress"
+call demo.manager GET /production-orders/7 | jq '{status, completed_quantity}'   # COMPLETED, 396
 ```
 
-Integration tests run against a separate `manuflow_test` schema that Alembic rebuilds at
-the start of every run; each test is rolled back afterwards. SQLite is not used, because
-row locking and `CHECK` constraints must behave exactly like production (B2, B15).
+## Key design decisions
 
-`python scripts/rule_coverage.py` lists every business rule (`BR-xx`) of the spec and
-the tests that cite it; a unit test fails if a rule of a completed phase has none.
-Concurrency tests (`-m concurrency`) use two real MySQL connections on two threads.
+The spec (`docs/requirements.md`) holds the business rules (`BR-xx`) and its decision table
+(`D-xx`); `docs/decisions.md` records the gaps found in the spec and how each was settled
+(`C-01`…`C-15`). The ones that matter most:
 
-CI (GitHub Actions) runs lint, type checks, `pip-audit` and the full test suite against a
-MySQL 8.0 service container on every pull request.
+- **All-or-nothing reservation** (BR-INV-05, D-08): a shortage reserves nothing, so stock is never stranded on half-planned orders.
+- **Fixed lock order** (B12): idempotency key → order → order lines → stock rows by ascending `material_id`, so two plans on the same steel serialise instead of deadlocking.
+- **Ledger plus DB constraints** (BR-INV-02/03/04, D-20): each balance change writes one append-only ledger line in the same transaction; `CHECK` constraints and triggers are the safety net.
+- **Idempotency in the same transaction** (D-22): the key row, the change and the stored response commit together.
+- **Decimal quantities as strings** (D-05): `quantize_up` is the only rounding function; quantities with too many decimals are rejected, never rounded silently.
+- **One writer of order status** (BR-PO-02): only the production service changes it, through the state table in `app/domain/order_state.py`; a test enforces it.
+- **Workers see only their station** (BR-AUTH-03): anything outside is a 404, not a 403.
+
+## Tests
+
+```bash
+docker compose exec api pytest -q                      # everything (real MySQL 8)
+docker compose exec api pytest -q tests/unit           # pure domain logic, < 5 s, no DB
+docker compose exec api pytest -q -m concurrency       # two real connections on two threads
+docker compose exec api python scripts/rule_coverage.py  # BR-xx -> tests
+docker compose exec api sh -c 'ruff check . && ruff format --check . && mypy'
+```
+
+| Level | What | How |
+| --- | --- | --- |
+| Unit | `app/domain/` (BOM explosion, state machine, progress, risk) | no DB |
+| Integration / API | services and routes, error format, permissions | MySQL `manuflow_test`, rebuilt by Alembic each run, every test rolled back |
+| Concurrency | row locks, idempotency races | committed data on two threads, cleaned afterwards |
+| Property | random receive / plan / issue / return / cancel / start sequences | Hypothesis; checks BR-INV-02 and BR-INV-04 after every step |
+
+SQLite is not used: row locking and `CHECK` constraints must behave exactly like MySQL.
+The concurrency tests prove, for example, that two plans of 80 and 50 units against 100 in
+stock leave exactly one order READY and 20 available. Every business rule has a test that
+cites it by name; CI fails if a rule of Phases 1–7 has none. Each pull request also lists
+a mutation check: the code is broken on purpose and the tests must fail.
+
+CI (GitHub Actions) runs ruff, mypy (strict), `pip-audit`, the rule-coverage check and the
+full suite against MySQL 8.0 on every pull request. The security review against B16 is in
+[`docs/security-review.md`](docs/security-review.md).
 
 ## Project layout
 
@@ -72,34 +167,52 @@ MySQL 8.0 service container on every pull request.
 backend/
   app/
     api/          thin routes, error mapping, dependencies
-    core/         settings, request ID, logging, clock
-    db/           declarative base, engine, session factory
+    core/         settings, security, permissions, request ID, logging, clock
+    db/           declarative base, engine, session, transactions
     domain/       pure business logic, no I/O
     models/       SQLAlchemy models
     repositories/ queries and row locks, never commit
     schemas/      Pydantic request/response models
     services/     use cases; each owns one DB transaction
   alembic/        migrations (run with a separate DDL user)
-  tests/          unit/ api/ integration/
+  seed/           demo shop
+  scripts/        rule -> test coverage report
+  tests/          unit/ api/ integration/ concurrency/
 docker/mysql/init/  creates databases and least-privilege DB users
-docs/               requirements, decisions, AI usage log
+docs/               requirements, decisions, security review, AI usage, interview notes
 ```
-
-## Known limitations
-
-- **Bottlenecks are not capacity planning.** There is no capacity or shift data, so
-  `/dashboard/bottlenecks` shows where unfinished units and at-risk orders pile up, not
-  how loaded the machines really are.
-- **A completed operation cannot be corrected** (C-10). Once an operation is COMPLETED,
-  progress reports on it are rejected; a wrong count has to be explained outside the
-  system.
-- **Material alerts are suggestions.** A MATERIAL_SHORTAGE order listed as a re-check
-  candidate stays in that state until someone runs `check-materials` (D-09).
-- Dashboard figures are computed on request with no cache; fine for the size of a small
-  shop, not for thousands of open orders.
 
 ## AI-assisted development
 
-Built with Claude Code under the rules in [`CLAUDE.md`](CLAUDE.md): one branch and one
-pull request per unit of work, tests for every business rule, CI on every PR, and a log
-of AI mistakes caught in review in [`docs/ai-usage.md`](docs/ai-usage.md).
+Built with Claude Code under the rules in [`CLAUDE.md`](CLAUDE.md) and the Git skill in
+`.claude/skills/git-pr-workflow/`:
+
+- one branch and one pull request per unit of work, with CI required before merge and no direct pushes to `main`;
+- the AI reports after every unit with the tests it actually ran and their real output;
+- every business rule has a test, and each PR lists a mutation check;
+- the owner reviews and merges; merging is the approval to start the next phase.
+
+[`docs/ai-usage.md`](docs/ai-usage.md) logs the real mistakes caught along the way (what
+the AI wrote, what caught it, how it was fixed, which PR), for example tests that passed
+for the wrong reason, a due date stored without UTC normalisation, and a scan test that
+checked nothing. [`docs/interview-notes.md`](docs/interview-notes.md) maps common
+interview questions to the code and tests that answer them.
+
+## Known limitations
+
+- **Bottlenecks are not capacity planning.** There is no capacity or shift data, so `/dashboard/bottlenecks` shows where unfinished units and at-risk orders pile up, not how loaded the machines really are.
+- **A completed operation cannot be corrected** (C-10). Once an operation is COMPLETED, progress reports on it are rejected; a wrong count has to be explained outside the system.
+- **Material alerts are suggestions.** A MATERIAL_SHORTAGE order listed as a re-check candidate stays in that state until someone runs `check-materials` (D-09).
+- Dashboard figures are computed on request with no cache; fine for a small shop, not for thousands of open orders.
+- The seed cannot be undone: the ledger and the audit log are append-only by design. Recreate the database volume to start over.
+
+## Out of scope
+
+Multi-level BOMs, several warehouses or bin locations, lots and serial numbers,
+purchasing, sales orders, costing, finite-capacity scheduling, rework orders, shift
+calendars, unit conversion, multi-tenancy and real-time push. Security items left to a
+real deployment: refresh tokens, HTTPS (a reverse proxy's job) and SSO.
+
+A real plant would add, in roughly this order: multi-level BOMs and several stock
+locations, lots for traceability, capacity-based scheduling, integration with the ERP
+that owns purchasing and sales, and an async job runner for reports.
