@@ -63,6 +63,10 @@ ENDPOINT_ACCESS: dict[tuple[str, str], AccessRule] = {
     ("GET", "/api/v1/inventory"): perm(Permission.INVENTORY_READ),
     ("GET", "/api/v1/inventory/transactions"): perm(Permission.INVENTORY_READ),
     ("GET", "/api/v1/admin/inventory-reconciliation"): perm(Permission.AUDIT_READ),
+    ("GET", "/api/v1/production-orders"): perm(Permission.ORDER_READ),
+    ("GET", "/api/v1/production-orders/{order_id}"): perm(Permission.ORDER_READ),
+    ("GET", "/api/v1/production-orders/{order_id}/materials"): perm(Permission.ORDER_READ),
+    ("GET", "/api/v1/production-orders/{order_id}/operations"): perm(Permission.ORDER_READ),
     ("POST", "/api/v1/production-orders"): perm(Permission.ORDER_CREATE),
     ("PATCH", "/api/v1/production-orders/{order_id}"): perm(Permission.ORDER_CREATE),
     ("POST", "/api/v1/production-orders/{order_id}/plan"): perm(Permission.ORDER_PLAN),
@@ -140,6 +144,9 @@ class Call:
     idempotency_key: bool = False  # D-22: the endpoint requires Idempotency-Key
     # Path placeholder -> targets key, when the default target is in the wrong state.
     params: tuple[tuple[str, str], ...] = ()
+    # BR-AUTH-03: a WORKER passes the permission check but may only see their own work
+    # center's data, so 404 is as valid as 2xx for them; 403 never is.
+    worker_scoped: bool = False
 
 
 PROTECTED_CALLS: list[Call] = [
@@ -222,6 +229,10 @@ PROTECTED_CALLS: list[Call] = [
     Call("GET", "/api/v1/inventory"),
     Call("GET", "/api/v1/inventory/transactions"),
     Call("GET", "/api/v1/admin/inventory-reconciliation"),
+    Call("GET", "/api/v1/production-orders"),
+    Call("GET", "/api/v1/production-orders/{order_id}", worker_scoped=True),
+    Call("GET", "/api/v1/production-orders/{order_id}/materials", worker_scoped=True),
+    Call("GET", "/api/v1/production-orders/{order_id}/operations", worker_scoped=True),
     Call(
         "POST",
         "/api/v1/production-orders",
@@ -355,7 +366,9 @@ def test_b4_role_gets_2xx_or_403_per_permission_matrix(
 
     rule = ENDPOINT_ACCESS[(call.method, call.path)]
     allowed = rule.permission is None or has_permission(role, rule.permission)
-    if allowed:
+    if allowed and call.worker_scoped and role is Role.WORKER:
+        assert status == 200 or status == 404, status
+    elif allowed:
         assert 200 <= status < 300, status
     else:
         assert status == 403

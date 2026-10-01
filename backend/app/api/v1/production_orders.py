@@ -7,9 +7,14 @@ from app.api.access import require
 from app.api.deps import get_production_order_service, get_request_context
 from app.api.idempotency import OptionalIdempotency, RequiredIdempotency
 from app.core.permissions import Permission
+from app.domain.order_state import OrderStatus
+from app.domain.scope import work_center_scope
+from app.schemas.common import DEFAULT_LIMIT, Limit, Offset, Page
 from app.schemas.production import (
     CancelRequest,
+    OperationResponse,
     OrderCreateRequest,
+    OrderMaterialResponse,
     OrderResponse,
     OrderUpdateRequest,
     ReservationResponse,
@@ -26,6 +31,7 @@ from app.services.production_service import (
 
 router = APIRouter(prefix="/production-orders", tags=["production orders"])
 
+Reader = Annotated[AuthenticatedUser, Depends(require(Permission.ORDER_READ))]
 Creator = Annotated[AuthenticatedUser, Depends(require(Permission.ORDER_CREATE))]
 Planner = Annotated[AuthenticatedUser, Depends(require(Permission.ORDER_PLAN))]
 Checker = Annotated[AuthenticatedUser, Depends(require(Permission.ORDER_CHECK_MATERIALS))]
@@ -33,6 +39,44 @@ Starter = Annotated[AuthenticatedUser, Depends(require(Permission.ORDER_START))]
 Canceller = Annotated[AuthenticatedUser, Depends(require(Permission.ORDER_CANCEL))]
 Service = Annotated[ProductionOrderService, Depends(get_production_order_service)]
 Context = Annotated[RequestContext, Depends(get_request_context)]
+
+
+def _scope(user: AuthenticatedUser) -> int | None:
+    """BR-AUTH-03: a WORKER only sees orders and operations at their work center."""
+    return work_center_scope(user.role, user.work_center_id)
+
+
+@router.get("")
+def list_orders(
+    user: Reader,
+    service: Service,
+    limit: Limit = DEFAULT_LIMIT,
+    offset: Offset = 0,
+    status: OrderStatus | None = None,
+    product_id: int | None = None,
+) -> Page[OrderResponse]:
+    """Orders by due date; ``allowed_actions`` per order for this user (BR-PO-05)."""
+    views, total = service.list_orders(limit, offset, _scope(user), status, product_id)
+    return Page(items=[OrderResponse.of(v, user.permissions) for v in views], total=total)
+
+
+@router.get("/{order_id}")
+def get_order(order_id: int, user: Reader, service: Service) -> OrderResponse:
+    return OrderResponse.of(service.get_order(order_id, _scope(user)), user.permissions)
+
+
+@router.get("/{order_id}/materials")
+def list_order_materials(
+    order_id: int, user: Reader, service: Service
+) -> Page[OrderMaterialResponse]:
+    rows = service.list_materials(order_id, _scope(user))
+    return Page(items=[OrderMaterialResponse.of(line, m) for line, m in rows], total=len(rows))
+
+
+@router.get("/{order_id}/operations")
+def list_order_operations(order_id: int, user: Reader, service: Service) -> Page[OperationResponse]:
+    rows = service.list_operations(order_id, _scope(user))
+    return Page(items=[OperationResponse.of(op, wc) for op, wc in rows], total=len(rows))
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=OrderResponse)
