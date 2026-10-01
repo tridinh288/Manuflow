@@ -69,6 +69,8 @@ ENDPOINT_ACCESS: dict[tuple[str, str], AccessRule] = {
     ("POST", "/api/v1/production-orders/{order_id}/check-materials"): perm(
         Permission.ORDER_CHECK_MATERIALS
     ),
+    ("POST", "/api/v1/inventory/issues"): perm(Permission.INVENTORY_ISSUE),
+    ("POST", "/api/v1/inventory/returns"): perm(Permission.INVENTORY_RETURN),
 }
 
 
@@ -235,6 +237,18 @@ PROTECTED_CALLS: list[Call] = [
         idempotency_key=True,
         params=(("order_id", "shortage_order_id"),),
     ),
+    Call(
+        "POST",
+        "/api/v1/inventory/issues",
+        json=lambda n: {"order_material_id": -1, "quantity": "1"},
+        idempotency_key=True,
+    ),
+    Call(
+        "POST",
+        "/api/v1/inventory/returns",
+        json=lambda n: {"order_material_id": -2, "quantity": "1"},
+        idempotency_key=True,
+    ),
 ]
 
 
@@ -253,6 +267,7 @@ def targets(
     bom_factory,
     routing_factory,
     order_factory,
+    order_line_factory,
 ) -> dict[str, int]:
     """One existing, unused row of each kind for the path parameters."""
     product = product_factory()
@@ -273,6 +288,18 @@ def targets(
         # product (C-13).
         "order_id": order_factory(plannable).id,
         "shortage_order_id": order_factory(plannable, status="MATERIAL_SHORTAGE").id,
+        "ready_line_id": order_line_factory(
+            order_factory(plannable, status="READY_TO_PRODUCE"),
+            material_factory(),
+            required="10",
+            reserved="10",
+        ).id,
+        "cancelled_line_id": order_line_factory(
+            order_factory(plannable, status="CANCELLED"),
+            material_factory(),
+            required="10",
+            issued="10",
+        ).id,
         "station_id": station.id,
     }
 
@@ -284,6 +311,10 @@ def _send(
     body = call.json(n) if call.json else None
     if body and "bom_header_id" in body:  # explode the target's own DRAFT version
         body = {**body, "bom_header_id": targets["bom_id"]}
+    if body and body.get("order_material_id") == -1:  # a READY order's reserved line
+        body = {**body, "order_material_id": targets["ready_line_id"]}
+    if body and body.get("order_material_id") == -2:  # a CANCELLED order's issued line
+        body = {**body, "order_material_id": targets["cancelled_line_id"]}
     if body and body.get("product_id") == 0:  # a real, active product
         body = {**body, "product_id": targets["product_id"]}
     if body and body.get("material_id") == 0:  # a real, active material

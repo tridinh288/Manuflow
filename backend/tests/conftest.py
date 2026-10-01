@@ -20,7 +20,7 @@ from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_clock, get_session
@@ -39,7 +39,7 @@ from app.domain.errors import (
 from app.main import create_app
 from app.models.bom import BomHeader, BomItem
 from app.models.master_data import Inventory, Material, Product
-from app.models.production import ProductionOrder
+from app.models.production import ProductionOrder, ProductionOrderMaterial
 from app.models.routing import Routing, RoutingStep
 from app.models.user import User
 from app.models.warehouse import DEFAULT_WAREHOUSE_CODE, Warehouse
@@ -176,6 +176,45 @@ WorkCenterFactory = Callable[..., WorkCenter]
 BomFactory = Callable[..., BomHeader]
 RoutingFactory = Callable[..., Routing]
 OrderFactory = Callable[..., ProductionOrder]
+OrderLineFactory = Callable[..., ProductionOrderMaterial]
+
+
+@pytest.fixture
+def order_line_factory(db_session: Session) -> OrderLineFactory:
+    """A material line in any state; also moves the balance so the stock adds up."""
+
+    def create(
+        order: ProductionOrder,
+        material: Material,
+        *,
+        required: str,
+        reserved: str = "0",
+        issued: str = "0",
+        on_hand: str | None = None,
+    ) -> ProductionOrderMaterial:
+        line = ProductionOrderMaterial(
+            production_order_id=order.id,
+            material_id=material.id,
+            required_quantity=Decimal(required),
+            reserved_quantity=Decimal(reserved),
+            issued_quantity=Decimal(issued),
+        )
+        insert(db_session, line)
+        with db_session.begin():
+            db_session.execute(
+                text(
+                    "UPDATE inventory SET on_hand_quantity = :on_hand, "
+                    "reserved_quantity = reserved_quantity + :reserved WHERE material_id = :id"
+                ),
+                {
+                    "on_hand": on_hand if on_hand is not None else reserved,
+                    "reserved": reserved,
+                    "id": material.id,
+                },
+            )
+        return line
+
+    return create
 
 
 @pytest.fixture

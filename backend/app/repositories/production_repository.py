@@ -97,3 +97,11 @@ class ProductionOrderRepository:
                 .execution_options(populate_existing=True)
             )
         )
+
+    def get_line_for_update(self, line_id: int) -> ProductionOrderMaterial | None:
+        return self._session.get(
+            ProductionOrderMaterial, line_id, with_for_update=True, populate_existing=True
+        )
+
+    def get_line(self, line_id: int) -> ProductionOrderMaterial | None:
+        return self._session.get(ProductionOrderMaterial, line_id, populate_existing=True)

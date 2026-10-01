@@ -16,14 +16,17 @@ from app.domain import inventory
 from app.domain.audit import AuditAction, AuditEntity
 from app.domain.errors import BusinessValidationError, ConflictError
 from app.domain.inventory import Balance, Movement, TransactionType
+from app.domain.order_state import OrderStatus, ensure_stock_movement_allowed
 from app.domain.quantities import format_quantity
 from app.models.inventory_transaction import InventoryTransaction
 from app.models.master_data import Inventory, Material
+from app.models.production import ProductionOrder, ProductionOrderMaterial
 from app.repositories.inventory_repository import (
     InventoryRepository,
     LedgerTotals,
     TransactionFilter,
 )
+from app.repositories.production_repository import ProductionOrderRepository
 from app.services.audit_service import AuditService
 from app.services.context import Actor, RequestContext
 
@@ -33,6 +36,12 @@ class MovementResult:
     line: InventoryTransaction
     material: Material
     balance: Balance
+
+
+@dataclass(frozen=True)
+class OrderMovementResult(MovementResult):
+    order: ProductionOrder
+    order_line: ProductionOrderMaterial
 
 
 @dataclass(frozen=True)
@@ -164,6 +173,93 @@ class InventoryService:
                 reason=reason,
             )
         return MovementResult(line=line, material=material, balance=movement.after)
+
+    def issue(
+        self, order_line_id: int, quantity: Decimal, actor: Actor, context: RequestContext
+    ) -> OrderMovementResult:
+        """ISSUE (D-10, C-05): only for a READY_TO_PRODUCE order, never more than what is
+        still reserved on the line. Lock order: order -> order line -> balance (B12)."""
+        return self._order_movement(order_line_id, quantity, TransactionType.ISSUE, actor, context)
+
+    def return_stock(
+        self, order_line_id: int, quantity: Decimal, actor: Actor, context: RequestContext
+    ) -> OrderMovementResult:
+        """RETURN (B6, C-05): only for a CANCELLED or COMPLETED order, at most what was
+        issued and not yet returned."""
+        return self._order_movement(order_line_id, quantity, TransactionType.RETURN, actor, context)
+
+    def _order_movement(
+        self,
+        order_line_id: int,
+        quantity: Decimal,
+        kind: TransactionType,
+        actor: Actor,
+        context: RequestContext,
+    ) -> OrderMovementResult:
+        orders = ProductionOrderRepository(self._session)
+        with transaction(self._session):
+            peek = orders.get_line(order_line_id)
+            if peek is None:
+                raise BusinessValidationError(
+                    "ORDER_MATERIAL_NOT_FOUND",
+                    "Production order material line does not exist.",
+                    [{"order_material_id": order_line_id}],
+                )
+            order = orders.get_for_update(peek.production_order_id)
+            if order is None:  # lines are never orphaned (FK)
+                raise RuntimeError(f"order of line {order_line_id} is missing")
+            line = orders.get_line_for_update(order_line_id)
+            if line is None:
+                raise RuntimeError(f"line {order_line_id} vanished under the order lock")
+            ensure_stock_movement_allowed(OrderStatus(order.status), kind.value)
+
+            material = self._inventory.materials_by_id([line.material_id])[line.material_id]
+            places = material.decimal_places
+            inventory.validate_movement_quantity(quantity, places)
+            row = self._inventory.lock_balance(material.id)
+            if kind is TransactionType.ISSUE:
+                inventory.ensure_issuable(quantity, line.reserved_quantity, places)
+                movement = inventory.issue(balance_of(row), quantity)
+                line.reserved_quantity -= quantity
+                line.issued_quantity += quantity
+                action = AuditAction.INVENTORY_ISSUE
+            else:
+                inventory.ensure_returnable(
+                    quantity, line.issued_quantity, line.returned_quantity, places
+                )
+                movement = inventory.return_to_stock(balance_of(row), quantity)
+                line.returned_quantity += quantity
+                action = AuditAction.INVENTORY_RETURN
+            ledger_line = self.record_movement(
+                row,
+                material,
+                movement,
+                kind,
+                actor,
+                context,
+                production_order_id=order.id,
+                order_material_id=line.id,
+            )
+            self._audit.record(
+                action=action,
+                entity_type=AuditEntity.PRODUCTION_ORDER_MATERIAL,
+                entity_id=line.id,
+                actor=actor,
+                context=context,
+                new_value={
+                    "material_code": material.material_code,
+                    "quantity": format_quantity(quantity, places),
+                    "unit": material.unit,
+                    "order_number": order.order_number,
+                },
+            )
+        return OrderMovementResult(
+            line=ledger_line,
+            material=material,
+            balance=movement.after,
+            order=order,
+            order_line=line,
+        )
 
     def _material(self, material_id: int) -> Material:
         material = self._inventory.get_material_for_share(material_id)

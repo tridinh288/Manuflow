@@ -88,6 +88,52 @@ def reserve(balance: Balance, quantity: Decimal) -> Movement:
     return Movement(on_hand_delta=Decimal(0), reserved_delta=quantity, after=after)
 
 
+def issue(balance: Balance, quantity: Decimal) -> Movement:
+    """ISSUE: hand reserved stock to production; on_hand -q and reserved -q (D-10)."""
+    after = Balance(balance.on_hand - quantity, balance.reserved - quantity)
+    _ensure_representable(after)
+    return Movement(on_hand_delta=-quantity, reserved_delta=-quantity, after=after)
+
+
+def return_to_stock(balance: Balance, quantity: Decimal) -> Movement:
+    """RETURN: issued material comes back; on_hand +q, reserved unchanged (B6)."""
+    after = Balance(balance.on_hand + quantity, balance.reserved)
+    _ensure_representable(after)
+    return Movement(on_hand_delta=quantity, reserved_delta=Decimal(0), after=after)
+
+
+def ensure_issuable(quantity: Decimal, still_reserved: Decimal, decimal_places: int) -> None:
+    """D-10: never more than what is still reserved on the order's line."""
+    if quantity > still_reserved:
+        raise ConflictError(
+            "EXCEEDS_RESERVED",
+            "The quantity exceeds what is still reserved for this order line.",
+            [
+                {
+                    "quantity": format_quantity(quantity, decimal_places),
+                    "still_reserved": format_quantity(still_reserved, decimal_places),
+                }
+            ],
+        )
+
+
+def ensure_returnable(
+    quantity: Decimal, issued: Decimal, returned: Decimal, decimal_places: int
+) -> None:
+    """B6: RETURN q <= issued - returned for the order's line."""
+    if quantity > issued - returned:
+        raise ConflictError(
+            "EXCEEDS_RETURNABLE",
+            "The quantity exceeds what was issued and not yet returned.",
+            [
+                {
+                    "quantity": format_quantity(quantity, decimal_places),
+                    "returnable": format_quantity(issued - returned, decimal_places),
+                }
+            ],
+        )
+
+
 def _ensure_representable(balance: Balance) -> None:
     if balance.on_hand >= MAX_BALANCE:
         raise BusinessValidationError(
