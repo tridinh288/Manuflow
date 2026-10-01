@@ -5,6 +5,7 @@ import { AuthProvider } from './auth/AuthContext'
 import { useAuth } from './auth/useAuth'
 import { Layout } from './components/Layout'
 import { visibleMenu } from './components/menu'
+import { AssistantPage } from './pages/AssistantPage'
 import { AuditPage } from './pages/AuditPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { InventoryPage } from './pages/InventoryPage'
@@ -45,6 +46,7 @@ export function AppRoutes() {
         <Route path="products" element={<ProductsPage />} />
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="audit" element={<AuditPage />} />
+        <Route path="assistant" element={<AssistantPage />} />
         <Route path="*" element={<p>Không tìm thấy trang.</p>} />
       </Route>
     </Routes>

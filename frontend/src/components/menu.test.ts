@@ -13,7 +13,7 @@ describe('B17: the menu comes from the permissions in /auth/me', () => {
     expect(visibleMenu(user('WORKER', ['order:read'])).map((i) => i.to)).not.toContain('/dashboard')
   })
 
-  it('shows nothing for a user without permissions', () => {
-    expect(visibleMenu(user('WORKER', []))).toEqual([])
+  it('shows only the assistant to a user without permissions (its tools check on the server)', () => {
+    expect(visibleMenu(user('WORKER', [])).map((i) => i.to)).toEqual(['/assistant'])
   })
 })

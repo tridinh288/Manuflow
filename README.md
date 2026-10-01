@@ -134,7 +134,7 @@ call demo.manager GET /production-orders/7 | jq '{status, completed_quantity}'  
 ## AI assistant (optional)
 
 Ask questions such as "Tuần này có làm được 150 FRAME-A không?" or "Lệnh nào đang trễ và vì
-sao?" with `POST /api/v1/assistant/ask`. Set `ASSISTANT_API_KEY` (and optionally
+sao?" with `POST /api/v1/assistant/ask` or the **Trợ lý** page of the UI. Set `ASSISTANT_API_KEY` (and optionally
 `ASSISTANT_MODEL`) in `.env` to switch it on; without a key it answers 503 and nothing
 else changes. **Free, local option:** install [Ollama](https://ollama.com), run
 `ollama pull qwen2.5:7b`, and set `ASSISTANT_PROVIDER=ollama`, `ASSISTANT_MODEL=qwen2.5:7b`
