@@ -12,7 +12,7 @@ from app.domain.scope import work_center_scope
 from app.schemas.common import DEFAULT_LIMIT, Limit, Offset, Page
 from app.schemas.production import (
     CancelRequest,
-    OperationResponse,
+    OperationsResponse,
     OrderCreateRequest,
     OrderMaterialResponse,
     OrderResponse,
@@ -74,9 +74,8 @@ def list_order_materials(
 
 
 @router.get("/{order_id}/operations")
-def list_order_operations(order_id: int, user: Reader, service: Service) -> Page[OperationResponse]:
-    rows = service.list_operations(order_id, _scope(user))
-    return Page(items=[OperationResponse.of(op, wc) for op, wc in rows], total=len(rows))
+def list_order_operations(order_id: int, user: Reader, service: Service) -> OperationsResponse:
+    return OperationsResponse.of(service.list_operations(order_id, _scope(user)))
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=OrderResponse)

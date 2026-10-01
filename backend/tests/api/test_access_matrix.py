@@ -78,6 +78,7 @@ ENDPOINT_ACCESS: dict[tuple[str, str], AccessRule] = {
     ("POST", "/api/v1/production-operations/{operation_id}/progress"): perm(
         Permission.OPERATION_REPORT
     ),
+    ("GET", "/api/v1/dashboard/risks"): perm(Permission.DASHBOARD_READ),
     ("POST", "/api/v1/inventory/issues"): perm(Permission.INVENTORY_ISSUE),
     ("POST", "/api/v1/inventory/returns"): perm(Permission.INVENTORY_RETURN),
 }
@@ -271,6 +272,7 @@ PROTECTED_CALLS: list[Call] = [
         idempotency_key=True,
         worker_scoped=True,
     ),
+    Call("GET", "/api/v1/dashboard/risks"),
     Call(
         "POST",
         "/api/v1/inventory/issues",

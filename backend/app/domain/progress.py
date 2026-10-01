@@ -6,6 +6,7 @@ Rejected units are scrapped (D-16); there is no rework.
 """
 
 from dataclasses import dataclass, replace
+from decimal import Decimal
 
 from app.domain.errors import BusinessValidationError, ConflictError
 from app.domain.operations import OperationStatus
@@ -118,3 +119,40 @@ def cascade_completions(planned: int, operations: list[OperationState]) -> list[
             break
         result[index] = replace(operation, status=OperationStatus.COMPLETED)
     return result
+
+
+# --- Progress metrics (B8): one definition for the API, the dashboard and risk -------------
+
+
+def operation_progress(operation: OperationState, planned: int) -> Decimal:
+    """1 when COMPLETED, otherwise processed / planned: the share of the order handled."""
+    if operation.status is OperationStatus.COMPLETED:
+        return Decimal(1)
+    return Decimal(operation.processed) / Decimal(planned)
+
+
+def yield_rate(operation: OperationState) -> Decimal | None:
+    """good / processed; ``None`` until something has been processed."""
+    if operation.processed == 0:
+        return None
+    return Decimal(operation.good) / Decimal(operation.processed)
+
+
+def workflow_progress(operations: list[OperationState], planned: int) -> Decimal:
+    """Mean of the operation progresses; what risk detection compares with time (B9)."""
+    if not operations:
+        return Decimal(0)
+    total = sum((operation_progress(op, planned) for op in operations), Decimal(0))
+    return total / Decimal(len(operations))
+
+
+def finished_progress(operations: list[OperationState], planned: int) -> Decimal:
+    """good(last) / planned: finished units that passed every operation."""
+    if not operations:
+        return Decimal(0)
+    return Decimal(operations[-1].good) / Decimal(planned)
+
+
+def current_operation(operations: list[OperationState]) -> OperationState | None:
+    """The smallest sequence not yet COMPLETED (B9)."""
+    return next((op for op in operations if op.status is not OperationStatus.COMPLETED), None)

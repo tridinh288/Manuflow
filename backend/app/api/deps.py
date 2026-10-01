@@ -1,6 +1,7 @@
 """Shared FastAPI dependencies."""
 
 from collections.abc import Iterator
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -8,7 +9,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.clock import Clock
+from app.core.config import Settings
 from app.domain.errors import AuthenticationError
+from app.domain.risk import RiskThresholds
 from app.services.auth_service import AuthenticatedUser, AuthService
 from app.services.bom_service import BomService
 from app.services.context import RequestContext
@@ -16,6 +19,7 @@ from app.services.inventory_service import InventoryService
 from app.services.master_data_service import MaterialService, ProductService, WorkCenterService
 from app.services.production_service import ProductionOrderService
 from app.services.progress_service import ProgressService
+from app.services.risk_service import RiskService
 from app.services.routing_service import RoutingService
 from app.services.user_service import UserService
 
@@ -114,3 +118,17 @@ def get_progress_service(
     clock: Annotated[Clock, Depends(get_clock)],
 ) -> ProgressService:
     return ProgressService(session, clock)
+
+
+def get_risk_service(
+    request: Request,
+    session: Annotated[Session, Depends(get_session)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> RiskService:
+    settings: Settings = request.app.state.settings
+    thresholds = RiskThresholds(  # D-24: configuration, not code
+        gap=settings.risk_gap,
+        due_soon=timedelta(hours=settings.due_soon_hours),
+        shortage_alert=timedelta(days=settings.shortage_alert_days),
+    )
+    return RiskService(session, clock, thresholds)
