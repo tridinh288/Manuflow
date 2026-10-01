@@ -24,12 +24,13 @@ from app.domain.operations import OperationStatus
 from app.domain.order_state import OrderAction, OrderStatus, ensure_allowed, transition
 from app.domain.quantities import format_quantity
 from app.domain.reservation import RequiredLine, decide
-from app.models.master_data import Product
+from app.models.master_data import Material, Product
 from app.models.production import (
     ProductionOperation,
     ProductionOrder,
     ProductionOrderMaterial,
 )
+from app.models.work_center import WorkCenter
 from app.repositories.bom_repository import BomRepository
 from app.repositories.inventory_repository import InventoryRepository
 from app.repositories.production_repository import ProductionOrderRepository
@@ -96,6 +97,51 @@ class ProductionOrderService:
         self._clock = clock
         self._orders = ProductionOrderRepository(session)
         self._audit = AuditService(session)
+
+    # --- Reads (BR-AUTH-03) ------------------------------------------------------------
+    # ``scope`` is the viewer's work center when they are a WORKER (domain.scope), else
+    # None. Orders outside it are reported as not found, never as forbidden.
+
+    def list_orders(
+        self,
+        limit: int,
+        offset: int,
+        scope: int | None,
+        status: OrderStatus | None = None,
+        product_id: int | None = None,
+    ) -> tuple[list[OrderView], int]:
+        with transaction(self._session):
+            rows, total = self._orders.list_orders(
+                limit, offset, status.value if status else None, product_id, scope
+            )
+            return [OrderView(order, product) for order, product in rows], total
+
+    def get_order(self, order_id: int, scope: int | None) -> OrderView:
+        with transaction(self._session):
+            return OrderView(*self._visible(order_id, scope))
+
+    def list_materials(
+        self, order_id: int, scope: int | None
+    ) -> list[tuple[ProductionOrderMaterial, Material]]:
+        with transaction(self._session):
+            self._visible(order_id, scope)
+            return list(self._orders.lines_with_materials(order_id))
+
+    def list_operations(
+        self, order_id: int, scope: int | None
+    ) -> list[tuple[ProductionOperation, WorkCenter]]:
+        """A WORKER sees only the operations at their own work center (D-18)."""
+        with transaction(self._session):
+            self._visible(order_id, scope)
+            return list(self._orders.operations_with_work_centers(order_id, scope))
+
+    def _visible(self, order_id: int, scope: int | None) -> tuple[ProductionOrder, Product]:
+        found = self._orders.get_in_scope(order_id, scope)
+        if found is None:
+            raise NotFoundError("ORDER_NOT_FOUND", "Production order not found.")
+        return found
+
+    # --- Commands -----------------------------------------------------------------------
 
     def create(self, data: NewOrder, actor: Actor, context: RequestContext) -> OrderView:
         quantity = validate_order_quantity(data.planned_quantity)

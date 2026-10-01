@@ -95,7 +95,7 @@ def cancel(factory: sessionmaker[Session], order_id: int) -> str:
     return "OK"
 
 
-def test_d13_cancel_waits_for_a_concurrent_issue_and_releases_only_the_rest(
+def test_br_po_03_cancel_waits_for_a_concurrent_issue_and_releases_only_the_rest(
     factory: sessionmaker[Session], setup: Setup
 ) -> None:
     with factory() as holder, holder.begin():

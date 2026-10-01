@@ -2,14 +2,12 @@
 
 This project is a student/personal simulation of an internal manufacturing management system. It models common workflows such as BOM management, material planning, inventory reservation, production planning, and workshop progress tracking. It is not a production ERP, and the author does not claim professional manufacturing experience.
 
-> Status: **Phase 5 — production orders** (in progress). Done: Phases 1–4 (foundation;
-> authentication, permissions, audit and idempotency; master data, versioned BOMs and
-> routings, BOM explosion; inventory ledger with receipts, adjustments and reconciliation).
-> Phase 5 so far: the order state machine, numbered orders (`PO-YYYY-NNNNN`) and DRAFT
-> updates, with `allowed_actions` computed per user; `plan` (snapshot of BOM and routing,
-> material lines, operations) and `check-materials` with all-or-nothing reservation; stock
-> issues against an order's reserved lines and returns after cancellation or completion;
-> `start` once every material is issued in full and `cancel` that releases reservations.
+> Status: **Phase 5 — production orders** (complete, pending review). Done: Phases 1–4
+> (foundation; authentication, permissions, audit and idempotency; master data, versioned
+> BOMs and routings, BOM explosion; inventory ledger) and Phase 5: the order state machine,
+> numbered orders, `plan` and `check-materials` with all-or-nothing reservation, issues
+> and returns against order lines, `start` once fully issued, `cancel` releasing
+> reservations, and order reads limited to a worker's own work center.
 
 ## Quick start
 

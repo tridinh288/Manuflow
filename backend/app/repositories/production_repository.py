@@ -1,14 +1,17 @@
-from sqlalchemy import select, text
+from collections.abc import Sequence
+
+from sqlalchemy import exists, func, select, text
 from sqlalchemy.orm import Session
 
 from app.domain.order_state import OPEN_STATUSES
-from app.models.master_data import Product
+from app.models.master_data import Material, Product
 from app.models.production import (
     DocumentSequence,
     ProductionOperation,
     ProductionOrder,
     ProductionOrderMaterial,
 )
+from app.models.work_center import WorkCenter
 
 ORDER_SEQUENCE = "production_order"
 
@@ -115,3 +118,76 @@ class ProductionOrderRepository:
                 .execution_options(populate_existing=True)
             )
         )
+
+    # --- Reads (BR-AUTH-03: ``work_center_id`` limits a WORKER to their work center) ------
+
+    @staticmethod
+    def _in_scope(work_center_id: int | None) -> list[object]:
+        if work_center_id is None:
+            return []
+        return [
+            exists().where(
+                ProductionOperation.production_order_id == ProductionOrder.id,
+                ProductionOperation.work_center_id == work_center_id,
+            )
+        ]
+
+    def list_orders(
+        self,
+        limit: int,
+        offset: int,
+        status: str | None,
+        product_id: int | None,
+        work_center_id: int | None,
+    ) -> tuple[Sequence[tuple[ProductionOrder, Product]], int]:
+        conditions: list[object] = self._in_scope(work_center_id)
+        if status is not None:
+            conditions.append(ProductionOrder.status == status)
+        if product_id is not None:
+            conditions.append(ProductionOrder.product_id == product_id)
+        base = (
+            select(ProductionOrder, Product)
+            .join(Product, Product.id == ProductionOrder.product_id)
+            .where(*conditions)  # type: ignore[arg-type]
+        )
+        total = self._session.scalar(select(func.count()).select_from(base.subquery())) or 0
+        rows = self._session.execute(
+            base.order_by(ProductionOrder.due_date, ProductionOrder.id).limit(limit).offset(offset)
+        ).all()
+        return [(order, product) for order, product in rows], total
+
+    def get_in_scope(
+        self, order_id: int, work_center_id: int | None
+    ) -> tuple[ProductionOrder, Product] | None:
+        row = self._session.execute(
+            select(ProductionOrder, Product)
+            .join(Product, Product.id == ProductionOrder.product_id)
+            .where(ProductionOrder.id == order_id, *self._in_scope(work_center_id))  # type: ignore[arg-type]
+            .execution_options(populate_existing=True)
+        ).one_or_none()
+        return None if row is None else (row[0], row[1])
+
+    def lines_with_materials(
+        self, order_id: int
+    ) -> Sequence[tuple[ProductionOrderMaterial, Material]]:
+        rows = self._session.execute(
+            select(ProductionOrderMaterial, Material)
+            .join(Material, Material.id == ProductionOrderMaterial.material_id)
+            .where(ProductionOrderMaterial.production_order_id == order_id)
+            .order_by(Material.material_code)
+        ).all()
+        return [(line, material) for line, material in rows]
+
+    def operations_with_work_centers(
+        self, order_id: int, work_center_id: int | None
+    ) -> Sequence[tuple[ProductionOperation, WorkCenter]]:
+        conditions = [ProductionOperation.production_order_id == order_id]
+        if work_center_id is not None:
+            conditions.append(ProductionOperation.work_center_id == work_center_id)
+        rows = self._session.execute(
+            select(ProductionOperation, WorkCenter)
+            .join(WorkCenter, WorkCenter.id == ProductionOperation.work_center_id)
+            .where(*conditions)
+            .order_by(ProductionOperation.sequence)
+        ).all()
+        return [(operation, center) for operation, center in rows]

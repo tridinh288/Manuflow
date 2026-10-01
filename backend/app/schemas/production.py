@@ -14,6 +14,9 @@ from pydantic import (
 from app.core.permissions import Permission
 from app.domain.order_state import OrderStatus, allowed_actions
 from app.domain.quantities import format_quantity
+from app.models.master_data import Material
+from app.models.production import ProductionOperation, ProductionOrderMaterial
+from app.models.work_center import WorkCenter
 from app.services.production_service import MaterialCheck, OrderView, ReservationResult
 
 
@@ -141,3 +144,58 @@ class CancelRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=500)]
+
+
+class OrderMaterialResponse(BaseModel):
+    id: int
+    material_id: int
+    material_code: str
+    unit: str
+    required_quantity: str
+    reserved_quantity: str
+    issued_quantity: str
+    returned_quantity: str
+    shortage_quantity: str
+
+    @classmethod
+    def of(cls, line: ProductionOrderMaterial, material: Material) -> "OrderMaterialResponse":
+        places = material.decimal_places
+        return cls(
+            id=line.id,
+            material_id=material.id,
+            material_code=material.material_code,
+            unit=material.unit,
+            required_quantity=format_quantity(line.required_quantity, places),
+            reserved_quantity=format_quantity(line.reserved_quantity, places),
+            issued_quantity=format_quantity(line.issued_quantity, places),
+            returned_quantity=format_quantity(line.returned_quantity, places),
+            shortage_quantity=format_quantity(line.shortage_quantity, places),
+        )
+
+
+class OperationResponse(BaseModel):
+    id: int
+    sequence: int
+    operation_type: str
+    work_center_id: int
+    work_center_code: str
+    status: str
+    good_quantity: int
+    rejected_quantity: int
+    started_at: datetime | None
+    completed_at: datetime | None
+
+    @classmethod
+    def of(cls, operation: ProductionOperation, center: WorkCenter) -> "OperationResponse":
+        return cls(
+            id=operation.id,
+            sequence=operation.sequence,
+            operation_type=operation.operation_type,
+            work_center_id=center.id,
+            work_center_code=center.code,
+            status=operation.status,
+            good_quantity=operation.good_quantity,
+            rejected_quantity=operation.rejected_quantity,
+            started_at=operation.started_at,
+            completed_at=operation.completed_at,
+        )

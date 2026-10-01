@@ -311,3 +311,26 @@ def test_br_po_01_refused_transitions_through_the_api(
     assert response.status_code == 409
     detail = response.json()["error"]["details"][0]
     assert (detail["current_status"], detail["action"]) == (status, action)
+
+
+# --- BR-PO-04: every status change is audited with the old and new status -----------------------
+
+
+def test_br_po_04_every_transition_of_an_order_is_audited(
+    flow: Flow, pm: dict[str, str], warehouse: dict[str, str]
+) -> None:
+    flow.issue(warehouse, flow.steel, "20")
+    flow.issue(warehouse, flow.bolt, "80")
+    flow.act(pm, "start")
+    rows = flow.session.scalars(
+        select(AuditLog)
+        .where(AuditLog.entity_type == "production_order", AuditLog.entity_id == flow.order.id)
+        .order_by(AuditLog.id)
+    ).all()
+    assert [
+        (row.action, (row.old_value or {}).get("status"), (row.new_value or {}).get("status"))
+        for row in rows
+    ] == [
+        ("ORDER_PLANNED", "DRAFT", "READY_TO_PRODUCE"),
+        ("ORDER_STARTED", "READY_TO_PRODUCE", "IN_PROGRESS"),
+    ]
