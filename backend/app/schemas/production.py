@@ -1,8 +1,15 @@
 from collections.abc import Iterable
 from datetime import datetime
-from typing import Any, Self
+from typing import Annotated, Any, Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 from app.core.permissions import Permission
 from app.domain.order_state import OrderStatus, allowed_actions
@@ -128,3 +135,9 @@ class ReservationResponse(OrderResponse):
             reserved=all(check.shortage == 0 for check in result.checks),
             material_check=[MaterialCheckResponse.of(check) for check in result.checks],
         )
+
+
+class CancelRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=500)]

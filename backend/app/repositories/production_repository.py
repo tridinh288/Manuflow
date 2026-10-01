@@ -105,3 +105,13 @@ class ProductionOrderRepository:
 
     def get_line(self, line_id: int) -> ProductionOrderMaterial | None:
         return self._session.get(ProductionOrderMaterial, line_id, populate_existing=True)
+
+    def operations_for_order(self, order_id: int) -> list[ProductionOperation]:
+        return list(
+            self._session.scalars(
+                select(ProductionOperation)
+                .where(ProductionOperation.production_order_id == order_id)
+                .order_by(ProductionOperation.sequence)
+                .execution_options(populate_existing=True)
+            )
+        )

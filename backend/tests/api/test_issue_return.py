@@ -280,7 +280,8 @@ def test_br_inv_04_reconciliation_after_plan_issue_cancel_return(
     routing_factory,
     order_factory,
 ) -> None:
-    """Every movement goes through the API, so the ledger must explain every balance."""
+    """Receipt, plan, issue, cancel, return: all through the API, so the ledger must
+    explain every balance."""
     warehouse, pm, admin = login_as(Role.WAREHOUSE), login_as(Role.PRODUCTION_MANAGER), login_as()
     product: Product = product_factory("FRAME-B")
     steel = material_factory("STEEL-002", unit="kg", decimal_places=3)
@@ -304,26 +305,12 @@ def test_br_inv_04_reconciliation_after_plan_issue_cancel_return(
     ).all()
     move = Mover(db_client, warehouse)
     assert move("issues", line.id, "12.5").status_code == 201
-    set_order_status(db_session, order, "CANCELLED")  # cancel endpoint arrives in the next PR
-    db_session.execute(
-        text("UPDATE production_order_materials SET reserved_quantity = 0 WHERE id = :id"),
-        {"id": line.id},
+    cancelled = db_client.post(
+        f"/api/v1/production-orders/{order.id}/cancel",
+        json={"reason": "Customer cancelled"},
+        headers={**pm, "Idempotency-Key": "recon-cancel-1"},
     )
-    db_session.execute(
-        text(
-            "INSERT INTO inventory_transactions (type, material_id, warehouse_id, on_hand_delta, "
-            "reserved_delta, on_hand_after, reserved_after, production_order_id, "
-            "order_material_id) SELECT 'RELEASE', material_id, warehouse_id, 0, "
-            "-reserved_quantity, on_hand_quantity, 0, :order, :line FROM inventory "
-            "WHERE material_id = :material"
-        ),
-        {"order": order.id, "line": line.id, "material": steel.id},
-    )
-    db_session.execute(
-        text("UPDATE inventory SET reserved_quantity = 0 WHERE material_id = :id"),
-        {"id": steel.id},
-    )
-    db_session.commit()
+    assert cancelled.json()["status"] == "CANCELLED"  # releases the 7.5 kg still reserved
     assert move("returns", line.id, "12.5").status_code == 201
 
     report = db_client.get("/api/v1/admin/inventory-reconciliation", headers=admin).json()
