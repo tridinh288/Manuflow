@@ -56,6 +56,13 @@ Mỗi mục ghi: AI đã viết gì, test hoặc review nào phát hiện, sửa
 - **Bài học áp dụng từ giờ:** mọi test đồng thời phải được kiểm chứng bằng cách cố tình phá code, và phải khẳng định **kết quả nghiệp vụ** (mã lỗi, số dòng), không chỉ "có phải chờ hay không".
 - **PR:** phase-3/master-data.
 
+### 8. Test đối soát chỉ kiểm một nửa bất biến (Phase 4)
+
+- **AI viết:** test BR-INV-04 cho trường hợp lệch chỉ sửa lén `on_hand_quantity`. Bất biến gồm hai vế: `SUM(on_hand_delta) = on_hand` **và** `SUM(reserved_delta) = reserved`. Một cài đặt chỉ kiểm vế đầu vẫn qua được toàn bộ test.
+- **Phát hiện bởi:** cố tình phá code, bỏ so sánh `reserved` trong `reconcile`: 7/7 test vẫn pass.
+- **Sửa:** thêm test sửa lén `reserved_quantity`, khẳng định có dòng lệch. Phá lại: fail; khôi phục: pass. Cùng lúc thêm trường hợp vật tư chưa có dòng sổ cái nào (bắt lỗi thiếu `COALESCE`).
+- **PR:** phase-4/inventory-reads-reconciliation.
+
 ## Rà soát đặc tả
 
 Ở bước rà soát (B20), AI tìm ra 10 điểm mâu thuẫn hoặc còn thiếu trong `docs/requirements.md`. Các điểm này được ghi lại cùng quyết định đã duyệt trong [`decisions.md`](decisions.md).

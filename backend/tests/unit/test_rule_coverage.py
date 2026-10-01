@@ -7,7 +7,17 @@ import importlib.util
 from pathlib import Path
 from types import ModuleType
 
-COMPLETED_PHASE_PREFIXES = ["BR-AUTH", "BR-AUD", "BR-MD", "BR-BOM", "BR-RT"]  # Phase 2, 3
+COMPLETED_PHASE_PREFIXES = [
+    "BR-AUTH",  # Phase 2
+    "BR-AUD",
+    "BR-MD",  # Phase 3
+    "BR-BOM",
+    "BR-RT",
+    "BR-INV-01",  # Phase 4 (BR-INV-05/06 are reservations, Phase 5)
+    "BR-INV-02",
+    "BR-INV-03",
+    "BR-INV-04",
+]
 
 
 def _load_script() -> ModuleType:

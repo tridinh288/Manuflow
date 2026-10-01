@@ -1,4 +1,9 @@
-from sqlalchemy import select
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import datetime
+from decimal import Decimal
+
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.inventory_transaction import InventoryTransaction
@@ -37,3 +42,104 @@ class InventoryRepository:
         self._session.flush()
         self._session.refresh(line, ["created_at"])  # set by the database
         return line
+
+    # --- Reads ---------------------------------------------------------------------------
+
+    def list_balances(
+        self, limit: int, offset: int, low_stock: bool
+    ) -> tuple[Sequence[tuple[Inventory, Material]], int]:
+        """D-25: low stock means available (on hand - reserved) below minimum stock."""
+        conditions = [Warehouse.code == DEFAULT_WAREHOUSE_CODE]
+        if low_stock:
+            available = Inventory.on_hand_quantity - Inventory.reserved_quantity
+            conditions.append(available < Material.minimum_stock)
+        base = (
+            select(Inventory, Material)
+            .join(Material, Material.id == Inventory.material_id)
+            .join(Warehouse, Warehouse.id == Inventory.warehouse_id)
+            .where(*conditions)
+        )
+        total = self._session.scalar(select(func.count()).select_from(base.subquery())) or 0
+        rows = self._session.execute(
+            base.order_by(Material.material_code).limit(limit).offset(offset)
+        ).all()
+        return [(inventory, material) for inventory, material in rows], total
+
+    def list_transactions(
+        self, filters: "TransactionFilter", limit: int, offset: int
+    ) -> tuple[Sequence[tuple[InventoryTransaction, Material]], int]:
+        conditions = []
+        if filters.material_id is not None:
+            conditions.append(InventoryTransaction.material_id == filters.material_id)
+        if filters.production_order_id is not None:
+            conditions.append(
+                InventoryTransaction.production_order_id == filters.production_order_id
+            )
+        if filters.type is not None:
+            conditions.append(InventoryTransaction.type == filters.type)
+        if filters.created_from is not None:
+            conditions.append(InventoryTransaction.created_at >= filters.created_from)
+        if filters.created_to is not None:
+            conditions.append(InventoryTransaction.created_at < filters.created_to)
+        base = (
+            select(InventoryTransaction, Material)
+            .join(Material, Material.id == InventoryTransaction.material_id)
+            .where(*conditions)
+        )
+        total = self._session.scalar(select(func.count()).select_from(base.subquery())) or 0
+        rows = self._session.execute(
+            base.order_by(InventoryTransaction.id.desc()).limit(limit).offset(offset)
+        ).all()
+        return [(line, material) for line, material in rows], total
+
+    def ledger_totals(self) -> Sequence["LedgerTotals"]:
+        """BR-INV-04: per balance row, the balance next to the sums of its ledger deltas."""
+        sums = (
+            select(
+                InventoryTransaction.material_id,
+                InventoryTransaction.warehouse_id,
+                func.sum(InventoryTransaction.on_hand_delta).label("on_hand_sum"),
+                func.sum(InventoryTransaction.reserved_delta).label("reserved_sum"),
+            )
+            .group_by(InventoryTransaction.material_id, InventoryTransaction.warehouse_id)
+            .subquery()
+        )
+        rows = self._session.execute(
+            select(
+                Material.id,
+                Material.material_code,
+                Material.decimal_places,
+                Inventory.on_hand_quantity,
+                Inventory.reserved_quantity,
+                func.coalesce(sums.c.on_hand_sum, 0),
+                func.coalesce(sums.c.reserved_sum, 0),
+            )
+            .join(Material, Material.id == Inventory.material_id)
+            .outerjoin(
+                sums,
+                (sums.c.material_id == Inventory.material_id)
+                & (sums.c.warehouse_id == Inventory.warehouse_id),
+            )
+            .order_by(Material.material_code)
+        ).all()
+        return [LedgerTotals(*row) for row in rows]
+
+
+@dataclass(frozen=True)
+class TransactionFilter:
+    material_id: int | None = None
+    production_order_id: int | None = None
+    type: str | None = None
+    created_from: datetime | None = None
+    created_to: datetime | None = None
+
+
+@dataclass(frozen=True)
+class LedgerTotals:
+    material_id: int
+    material_code: str
+    decimal_places: int
+    on_hand: Decimal
+    reserved: Decimal
+    on_hand_ledger: Decimal
+    reserved_ledger: Decimal

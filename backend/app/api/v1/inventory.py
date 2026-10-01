@@ -2,15 +2,21 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
+from pydantic import AwareDatetime
 
 from app.api.access import require
 from app.api.deps import get_inventory_service, get_request_context
 from app.api.idempotency import RequiredIdempotency
 from app.core.permissions import Permission
+from app.domain.inventory import TransactionType
+from app.repositories.inventory_repository import TransactionFilter
+from app.schemas.common import DEFAULT_LIMIT, Limit, Offset, Page
 from app.schemas.inventory import (
     AdjustmentRequest,
+    BalanceResponse,
     MovementResponse,
     ReceiptRequest,
+    TransactionResponse,
     to_decimal,
 )
 from app.services.auth_service import AuthenticatedUser
@@ -19,10 +25,50 @@ from app.services.inventory_service import InventoryService
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
+Reader = Annotated[AuthenticatedUser, Depends(require(Permission.INVENTORY_READ))]
 Receiver = Annotated[AuthenticatedUser, Depends(require(Permission.INVENTORY_RECEIVE))]
 Adjuster = Annotated[AuthenticatedUser, Depends(require(Permission.INVENTORY_ADJUST))]
 Service = Annotated[InventoryService, Depends(get_inventory_service)]
 Context = Annotated[RequestContext, Depends(get_request_context)]
+
+
+@router.get("")
+def list_balances(
+    _: Reader,
+    service: Service,
+    limit: Limit = DEFAULT_LIMIT,
+    offset: Offset = 0,
+    low_stock: bool = False,
+) -> Page[BalanceResponse]:
+    """Balances per material; ``low_stock=true`` keeps available < minimum_stock (D-25)."""
+    rows, total = service.list_balances(limit, offset, low_stock)
+    return Page(items=[BalanceResponse.of(row, material) for row, material in rows], total=total)
+
+
+@router.get("/transactions")
+def list_transactions(
+    _: Reader,
+    service: Service,
+    limit: Limit = DEFAULT_LIMIT,
+    offset: Offset = 0,
+    material_id: int | None = None,
+    production_order_id: int | None = None,
+    type: TransactionType | None = None,
+    created_from: AwareDatetime | None = None,
+    created_to: AwareDatetime | None = None,
+) -> Page[TransactionResponse]:
+    """The ledger, newest first; date filters must carry a timezone (D-23)."""
+    filters = TransactionFilter(
+        material_id=material_id,
+        production_order_id=production_order_id,
+        type=type.value if type else None,
+        created_from=created_from,
+        created_to=created_to,
+    )
+    rows, total = service.list_transactions(filters, limit, offset)
+    return Page(
+        items=[TransactionResponse.of(line, material) for line, material in rows], total=total
+    )
 
 
 @router.post("/receipts", status_code=status.HTTP_201_CREATED, response_model=MovementResponse)

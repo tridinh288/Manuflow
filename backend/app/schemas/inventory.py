@@ -6,7 +6,10 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.domain.inventory import TransactionType
 from app.domain.quantities import format_quantity
-from app.services.inventory_service import MovementResult
+from app.models.inventory_transaction import InventoryTransaction
+from app.models.master_data import Inventory, Material
+from app.repositories.inventory_repository import LedgerTotals
+from app.services.inventory_service import MovementResult, Reconciliation
 
 # B13: quantities are strings; the per-material scale is checked by the domain (B6).
 QuantityString = Annotated[str, StringConstraints(pattern=r"^\d{1,14}(\.\d{1,4})?$", strict=True)]
@@ -75,3 +78,112 @@ class MovementResponse(BaseModel):
 
 def to_decimal(value: str) -> Decimal:
     return Decimal(value)
+
+
+class BalanceResponse(BaseModel):
+    material_id: int
+    material_code: str
+    material_name: str
+    unit: str
+    active: bool
+    on_hand_quantity: str
+    reserved_quantity: str
+    available_quantity: str
+    minimum_stock: str
+    low_stock: bool
+    below_minimum_by: str
+
+    @classmethod
+    def of(cls, row: Inventory, material: Material) -> "BalanceResponse":
+        places = material.decimal_places
+        available = row.on_hand_quantity - row.reserved_quantity
+        shortfall = max(Decimal(0), material.minimum_stock - available)
+        return cls(
+            material_id=material.id,
+            material_code=material.material_code,
+            material_name=material.name,
+            unit=material.unit,
+            active=material.active,
+            on_hand_quantity=format_quantity(row.on_hand_quantity, places),
+            reserved_quantity=format_quantity(row.reserved_quantity, places),
+            available_quantity=format_quantity(available, places),
+            minimum_stock=format_quantity(material.minimum_stock, places),
+            low_stock=available < material.minimum_stock,  # D-25
+            below_minimum_by=format_quantity(shortfall, places),
+        )
+
+
+class TransactionResponse(BaseModel):
+    id: int
+    type: TransactionType
+    material_id: int
+    material_code: str
+    unit: str
+    on_hand_delta: str
+    reserved_delta: str
+    on_hand_after: str
+    reserved_after: str
+    production_order_id: int | None
+    order_material_id: int | None
+    reference: str | None
+    reason: str | None
+    created_by: int | None
+    request_id: str | None
+    created_at: datetime
+
+    @classmethod
+    def of(cls, line: InventoryTransaction, material: Material) -> "TransactionResponse":
+        places = material.decimal_places
+        return cls(
+            id=line.id,
+            type=TransactionType(line.type),
+            material_id=material.id,
+            material_code=material.material_code,
+            unit=material.unit,
+            on_hand_delta=format_quantity(line.on_hand_delta, places),
+            reserved_delta=format_quantity(line.reserved_delta, places),
+            on_hand_after=format_quantity(line.on_hand_after, places),
+            reserved_after=format_quantity(line.reserved_after, places),
+            production_order_id=line.production_order_id,
+            order_material_id=line.order_material_id,
+            reference=line.reference,
+            reason=line.reason,
+            created_by=line.created_by,
+            request_id=line.request_id,
+            created_at=line.created_at,
+        )
+
+
+class MismatchResponse(BaseModel):
+    material_id: int
+    material_code: str
+    on_hand_quantity: str
+    on_hand_ledger_sum: str
+    reserved_quantity: str
+    reserved_ledger_sum: str
+
+    @classmethod
+    def of(cls, totals: LedgerTotals) -> "MismatchResponse":
+        # Unformatted on purpose: a corrupted value may carry digits the material forbids.
+        return cls(
+            material_id=totals.material_id,
+            material_code=totals.material_code,
+            on_hand_quantity=str(totals.on_hand),
+            on_hand_ledger_sum=str(totals.on_hand_ledger),
+            reserved_quantity=str(totals.reserved),
+            reserved_ledger_sum=str(totals.reserved_ledger),
+        )
+
+
+class ReconciliationResponse(BaseModel):
+    consistent: bool
+    checked_materials: int
+    mismatches: list[MismatchResponse]
+
+    @classmethod
+    def of(cls, result: Reconciliation) -> "ReconciliationResponse":
+        return cls(
+            consistent=not result.mismatches,
+            checked_materials=result.checked,
+            mismatches=[MismatchResponse.of(m) for m in result.mismatches],
+        )
