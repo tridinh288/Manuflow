@@ -26,6 +26,8 @@ class OperationState:
 
 def limits(planned: int, operations: list[OperationState]) -> list[int]:
     """D-14: limit(1) = planned, limit(n) = good(n-1). Operations sorted by sequence."""
+    if not operations:
+        return []
     return [planned] + [operation.good for operation in operations[:-1]]
 
 

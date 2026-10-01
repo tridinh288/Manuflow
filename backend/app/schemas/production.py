@@ -193,6 +193,8 @@ class OperationResponse(BaseModel):
     completed_at: datetime | None
     progress: float  # B8: 1 when COMPLETED, otherwise processed / planned
     yield_rate: float | None  # good / processed
+    processed_quantity: int  # good + rejected
+    limit: int  # D-14: limit(1) = planned, limit(n) = good(n-1); report up to limit - processed
 
     @classmethod
     def of(cls, metrics: OperationMetrics) -> "OperationResponse":
@@ -210,6 +212,8 @@ class OperationResponse(BaseModel):
             completed_at=operation.completed_at,
             progress=ratio(metrics.progress),
             yield_rate=ratio(metrics.yield_rate) if metrics.yield_rate is not None else None,
+            processed_quantity=metrics.processed,
+            limit=metrics.limit,
         )
 
 
