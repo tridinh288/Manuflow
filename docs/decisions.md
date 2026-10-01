@@ -19,6 +19,7 @@ Mã `C-xx` được dùng để không trùng với `D-xx`. Khi chủ dự án c
 | C-12 | BR-AUTH, B4, D-17 | Đặc tả không ngăn việc vô hiệu hóa hoặc hạ vai trò ADMIN cuối cùng, khiến hệ thống có thể mất hết quản trị viên | Từ chối 409 `LAST_ADMIN` khi thay đổi làm ADMIN active cuối cùng mất quyền. Service khóa mọi dòng ADMIN active (theo `id`) trước dòng đích, để hai admin hạ nhau cùng lúc được tuần tự hóa | Phase 2 |
 | C-13 | D-19, BR-MD-04 | Đọc sát chữ, D-19 chặn vô hiệu hóa sản phẩm còn BOM ACTIVE. Nhưng BOM ACTIVE chỉ chuyển RETIRED khi có phiên bản mới, nên sản phẩm đã có BOM sẽ không bao giờ vô hiệu hóa được | Sản phẩm chỉ bị chặn khi còn lệnh sản xuất đang mở (Phase 5). BOM/routing được giữ nhưng không dùng được nữa (bung BOM → 409 `PRODUCT_INACTIVE`). Điều kiện "BOM ACTIVE tham chiếu" của D-19 chỉ áp dụng cho vật tư | Phase 3 |
 | C-14 | BR-MD-02, D-05 | Chưa quy định có được sửa `unit` và `decimal_places` của vật tư hay không; giảm số chữ số lẻ sẽ làm dữ liệu cũ vi phạm quy tắc làm tròn | `unit` và `decimal_places` không sửa được sau khi tạo, giống mã vật tư. PUT chỉ nhận `name` và `minimum_stock` | Phase 3 |
+| C-15 | B6, BR-MD-04 | Chưa quy định có được nhập kho cho vật tư đã vô hiệu hóa hay không | RECEIVE bị từ chối (409 `MATERIAL_INACTIVE`); ADJUSTMENT vẫn được phép để kiểm kê hoặc xóa sổ phần tồn còn lại | Phase 4 |
 
 ## Ghi chú triển khai
 
@@ -29,3 +30,4 @@ Mã `C-xx` được dùng để không trùng với `D-xx`. Khi chủ dự án c
 - C-13, C-14 được chủ dự án duyệt ngày 2026-09-30 ("làm theo kế hoạch đó đi").
 - Bảng `inventory` được tạo ở Phase 3 (không đợi Phase 4) để mỗi vật tư có dòng tồn kho bằng 0 ngay khi được tạo (BR-INV-01).
 - C-07 hoàn tất ở Phase 3: work center bị chặn vô hiệu hóa khi còn WORKER active hoặc nằm trong routing ACTIVE. Gán WORKER và kích hoạt routing đều khóa dòng work center.
+- C-15 được chủ dự án duyệt ngày 2026-10-01. Thứ tự khóa của mọi biến động kho: key idempotency → khóa đọc chung trên dòng vật tư → khóa ghi trên dòng tồn kho. Vô hiệu hóa vật tư và kích hoạt BOM chỉ khóa dòng vật tư, nên không tạo vòng chờ.

@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.clock import Clock
+from app.db.retry import run_with_lock_retry
 from app.db.transaction import joinable_transaction, transaction
 from app.domain.errors import BusinessValidationError, ConcurrencyConflictError
 from app.domain.idempotency import is_expired
@@ -73,7 +74,8 @@ class IdempotencyService:
     ) -> StoredResponse:
         for _ in range(_MAX_ATTEMPTS):
             try:
-                return self._execute(request, operation, serialize)
+                # B12: a deadlock or lock-wait timeout re-runs the whole transaction.
+                return run_with_lock_retry(lambda: self._execute(request, operation, serialize))
             except _KeyAlreadyUsedError:
                 stored = self._stored_response(request)
                 if stored is not None:

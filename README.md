@@ -2,13 +2,11 @@
 
 This project is a student/personal simulation of an internal manufacturing management system. It models common workflows such as BOM management, material planning, inventory reservation, production planning, and workshop progress tracking. It is not a production ERP, and the author does not claim professional manufacturing experience.
 
-> Status: **Phase 3 — master data and BOM** (in progress). Done: Phase 1 foundation; Phase 2
-> authentication (JWT, lockout, permission matrix, user admin), append-only audit log and
-> idempotent mutations; products, materials (with their zero inventory balance) and work
-> centers with immutable codes and deactivate-only deletes; versioned BOMs (DRAFT → ACTIVE →
-> RETIRED, one ACTIVE per product enforced by a generated column and unique index) and BOM
-> explosion (`POST /products/{id}/bom/explode`, rounded up per material, e.g. 58.8 → 59 bolts);
-> versioned routings whose last step must be QC.
+> Status: **Phase 4 — inventory ledger** (in progress). Done: Phases 1–3 (foundation;
+> authentication, permissions, audit and idempotency; master data, versioned BOMs and
+> routings, BOM explosion). Phase 4 so far: an append-only inventory ledger and
+> idempotent stock receipts (`POST /api/v1/inventory/receipts`, `Idempotency-Key`
+> required), with deadlock retry.
 
 ## Quick start
 
