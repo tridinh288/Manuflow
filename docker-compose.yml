@@ -42,5 +42,23 @@ services:
       sh -c "alembic upgrade head &&
              uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --reload"
 
+  web:
+    # Phase 8 demo UI (B17). Vite dev server; the browser calls the API on the host port.
+    image: node:24-alpine
+    working_dir: /web
+    depends_on:
+      - api
+    environment:
+      VITE_API_URL: http://localhost:${API_HOST_PORT:-8000}/api/v1
+    ports:
+      - "${WEB_HOST_PORT:-5173}:5173"
+    volumes:
+      - ./frontend:/web
+      - ./docs:/docs:ro
+      # Linux node_modules stay inside the container, apart from the host's.
+      - web_node_modules:/web/node_modules
+    command: sh -c "npm ci --no-audit --no-fund && npm run dev"
+
 volumes:
   db_data:
+  web_node_modules:
