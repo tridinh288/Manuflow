@@ -122,6 +122,14 @@ Mỗi mục ghi: AI đã viết gì, test hoặc review nào phát hiện, sửa
 - **Bài học:** "mỗi quy tắc có một test" chưa đủ khi một quy tắc gồm nhiều ý; danh sách đối chiếu nên đọc từ nguồn sự thật, không chép tay. Trước khi báo "xong", phải liệt kê thứ thực sự đang chạy rồi so với đặc tả.
 - **PR:** phase-7/audit-log-endpoint.
 
+### 16. Thêm trường cho frontend làm vỡ endpoint với lệnh chưa có công đoạn (Phase 8)
+
+- **AI viết:** để trang Work center hiển thị giới hạn do server tính, AI thêm `limit` vào `GET /production-orders/{id}/operations`, ghép bằng `zip(..., strict=True)` với `progress.limits(planned, ops)`. Test ví dụ B8 được mở rộng và pass.
+- **Phát hiện:** test ma trận quyền gọi endpoint với một lệnh DRAFT chưa có công đoạn và nhận **500**: `limits(100, [])` trả `[100]`, nên `zip` strict báo lệch độ dài. Test B8 chỉ có lệnh đủ 5 công đoạn.
+- **Sửa:** `limits` trả `[]` khi không có công đoạn (đúng nghĩa D-14: không có công đoạn thì không có giới hạn). Thêm test domain và test API cho lệnh không có công đoạn; gỡ bản sửa thì cả hai fail.
+- **Bài học:** chạy toàn bộ test trước khi commit, kể cả khi thay đổi "chỉ thêm một trường"; mọi hàm danh sách cần một test với danh sách rỗng (giống mục 12).
+- **PR:** phase-8/orders-workcenter.
+
 ## Rà soát đặc tả
 
 Ở bước rà soát (B20), AI tìm ra 10 điểm mâu thuẫn hoặc còn thiếu trong `docs/requirements.md`. Các điểm này được ghi lại cùng quyết định đã duyệt trong [`decisions.md`](decisions.md).

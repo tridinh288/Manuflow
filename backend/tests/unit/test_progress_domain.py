@@ -33,6 +33,11 @@ def test_d14_limits_of_the_b8_example() -> None:
     assert limits(100, B8) == [100, 100, 97, 80, 50]
 
 
+def test_d14_an_order_without_operations_has_no_limits() -> None:
+    # A DRAFT order has no operations yet; GET .../operations must still answer.
+    assert limits(100, []) == []
+
+
 def test_br_op_02_report_within_the_limit_is_applied() -> None:
     after = apply_report(100, B8, 3, 20, 0)  # PAINTING 50 -> 70 of 80
     assert (after[3].good, after[3].status) == (70, IP)

@@ -73,6 +73,8 @@ class OperationMetrics:
     work_center: WorkCenter
     progress: Decimal
     yield_rate: Decimal | None
+    limit: int  # D-14: the most this operation may process (planned, or good of the previous)
+    processed: int
 
 
 @dataclass(frozen=True)
@@ -161,8 +163,12 @@ class ProductionOrderService:
             visible = self._orders.operations_with_work_centers(order_id, scope)
             every = self._orders.operations_for_order(order_id)
         planned = order.planned_quantity
+        every = sorted(every, key=lambda op: op.sequence)
         states = {op.id: _state(op) for op in every}
         ordered = [states[op.id] for op in every]
+        limit_of = dict(
+            zip((op.id for op in every), progress.limits(planned, ordered), strict=True)
+        )
         return OperationsView(
             rows=[
                 OperationMetrics(
@@ -170,6 +176,8 @@ class ProductionOrderService:
                     work_center=center,
                     progress=progress.operation_progress(states[op.id], planned),
                     yield_rate=progress.yield_rate(states[op.id]),
+                    limit=limit_of[op.id],
+                    processed=states[op.id].processed,
                 )
                 for op, center in visible
             ],

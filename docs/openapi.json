@@ -999,9 +999,17 @@
             "title": "Id",
             "type": "integer"
           },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
           "operation_type": {
             "title": "Operation Type",
             "type": "string"
+          },
+          "processed_quantity": {
+            "title": "Processed Quantity",
+            "type": "integer"
           },
           "progress": {
             "title": "Progress",
@@ -1063,7 +1071,9 @@
           "started_at",
           "completed_at",
           "progress",
-          "yield_rate"
+          "yield_rate",
+          "processed_quantity",
+          "limit"
         ],
         "title": "OperationResponse",
         "type": "object"

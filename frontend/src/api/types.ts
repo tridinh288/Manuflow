@@ -11,6 +11,14 @@ export type Bottleneck = S['BottleneckResponse']
 export type MaterialAlerts = S['MaterialAlertsResponse']
 export type Balance = S['BalanceResponse']
 export type OrderSummary = S['OrderSummary']
+export type Order = S['OrderResponse']
+export type Reservation = S['ReservationResponse']
+export type OrderMaterial = S['OrderMaterialResponse']
+export type Operation = S['OperationResponse']
+export type Operations = S['OperationsResponse']
+export type Product = S['ProductResponse']
+export type ProgressResult = S['ProgressResponse']
+export type OrderStatus = S['OrderStatus']
 
 export type Page<T> = { items: T[]; total: number }
 

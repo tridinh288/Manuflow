@@ -1102,8 +1102,12 @@ export interface components {
             good_quantity: number;
             /** Id */
             id: number;
+            /** Limit */
+            limit: number;
             /** Operation Type */
             operation_type: string;
+            /** Processed Quantity */
+            processed_quantity: number;
             /** Progress */
             progress: number;
             /** Rejected Quantity */

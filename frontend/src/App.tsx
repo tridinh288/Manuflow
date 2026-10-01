@@ -7,6 +7,9 @@ import { Layout } from './components/Layout'
 import { visibleMenu } from './components/menu'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
+import { MyWorkCenterPage } from './pages/MyWorkCenterPage'
+import { OrderDetailPage } from './pages/OrderDetailPage'
+import { OrdersPage } from './pages/OrdersPage'
 
 function RequireLogin({ children }: { children: ReactNode }) {
   const { me, ready } = useAuth()
@@ -33,6 +36,9 @@ export function AppRoutes() {
       >
         <Route index element={<Home />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="orders" element={<OrdersPage />} />
+        <Route path="orders/:id" element={<OrderDetailPage />} />
+        <Route path="my-work" element={<MyWorkCenterPage />} />
         <Route path="*" element={<p>Không tìm thấy trang.</p>} />
       </Route>
     </Routes>

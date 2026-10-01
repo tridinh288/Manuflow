@@ -87,6 +87,14 @@ def test_b8_operations_endpoint_reports_the_worked_example(
         (40, 0.5, 1.0),
         (50, 0.0, None),
     ]
+    # D-14, shown on the worker page: limit(1) = planned, limit(n) = good(n-1).
+    assert [(op["limit"], op["processed_quantity"]) for op in body["items"]] == [
+        (100, 100),
+        (100, 100),
+        (97, 80),
+        (80, 50),
+        (50, 0),
+    ]
 
 
 def test_b9_behind_schedule_order_is_reported_with_its_current_operation(
@@ -180,3 +188,12 @@ def test_b9_at_risk_comes_before_on_track_even_when_due_later(
 
 def test_b4_workers_have_no_dashboard(db_client: TestClient, login_as) -> None:
     assert db_client.get(RISKS, headers=login_as(Role.WORKER)).status_code == 403
+
+
+def test_d14_operations_of_an_order_without_operations_is_an_empty_list(
+    db_client: TestClient, pm: dict[str, str], order_factory, frame: Product
+) -> None:
+    draft = order_factory(frame, status="DRAFT", number="PO-2026-00099")
+    response = db_client.get(f"/api/v1/production-orders/{draft.id}/operations", headers=pm)
+    assert response.status_code == 200, response.text
+    assert response.json()["items"] == []
