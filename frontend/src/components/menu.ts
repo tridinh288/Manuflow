@@ -13,6 +13,9 @@ export const MENU: MenuItem[] = [
     label: 'Work center của tôi',
     visible: (me) => has('operation:report')(me) && me.work_center_id !== null,
   },
+  { to: '/products', label: 'Sản phẩm · BOM · Routing', visible: has('master:read') },
+  { to: '/inventory', label: 'Tồn kho', visible: has('inventory:read') },
+  { to: '/audit', label: 'Audit log', visible: has('audit:read') },
 ]
 
 export function visibleMenu(me: Me): MenuItem[] {

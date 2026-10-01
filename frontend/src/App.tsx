@@ -5,11 +5,14 @@ import { AuthProvider } from './auth/AuthContext'
 import { useAuth } from './auth/useAuth'
 import { Layout } from './components/Layout'
 import { visibleMenu } from './components/menu'
+import { AuditPage } from './pages/AuditPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { InventoryPage } from './pages/InventoryPage'
 import { LoginPage } from './pages/LoginPage'
 import { MyWorkCenterPage } from './pages/MyWorkCenterPage'
 import { OrderDetailPage } from './pages/OrderDetailPage'
 import { OrdersPage } from './pages/OrdersPage'
+import { ProductsPage } from './pages/ProductsPage'
 
 function RequireLogin({ children }: { children: ReactNode }) {
   const { me, ready } = useAuth()
@@ -39,6 +42,9 @@ export function AppRoutes() {
         <Route path="orders" element={<OrdersPage />} />
         <Route path="orders/:id" element={<OrderDetailPage />} />
         <Route path="my-work" element={<MyWorkCenterPage />} />
+        <Route path="products" element={<ProductsPage />} />
+        <Route path="inventory" element={<InventoryPage />} />
+        <Route path="audit" element={<AuditPage />} />
         <Route path="*" element={<p>Không tìm thấy trang.</p>} />
       </Route>
     </Routes>

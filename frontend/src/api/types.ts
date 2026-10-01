@@ -19,6 +19,17 @@ export type Operations = S['OperationsResponse']
 export type Product = S['ProductResponse']
 export type ProgressResult = S['ProgressResponse']
 export type OrderStatus = S['OrderStatus']
+export type Bom = S['BomResponse']
+export type Explosion = S['ExplodeResponse']
+export type Routing = S['RoutingResponse']
+export type Material = S['MaterialResponse']
+export type WorkCenter = S['WorkCenterResponse']
+export type LedgerLine = S['TransactionResponse']
+export type Movement = S['MovementResponse']
+export type AuditLog = S['AuditLogResponse']
+export type AuditAction = S['AuditAction']
+export type AuditEntity = S['AuditEntity']
+export type OperationType = S['OperationType']
 
 export type Page<T> = { items: T[]; total: number }
 
