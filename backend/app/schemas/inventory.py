@@ -20,6 +20,19 @@ class ReceiptRequest(BaseModel):
     reference: str | None = Field(default=None, min_length=1, max_length=64)
 
 
+SignedQuantityString = Annotated[
+    str, StringConstraints(pattern=r"^-?\d{1,14}(\.\d{1,4})?$", strict=True)
+]
+
+
+class AdjustmentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    material_id: int = Field(gt=0)
+    quantity_delta: SignedQuantityString  # negative decreases stock
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=500)]
+
+
 class MovementResponse(BaseModel):
     transaction_id: int
     type: TransactionType

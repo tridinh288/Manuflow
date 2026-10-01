@@ -8,7 +8,7 @@ from decimal import Decimal
 from enum import StrEnum
 
 from app.domain.errors import BusinessValidationError, ConflictError
-from app.domain.quantities import ensure_scale
+from app.domain.quantities import ensure_scale, format_quantity
 
 # DECIMAL(18,4) holds at most 14 integer digits.
 MAX_BALANCE = Decimal(10) ** 14
@@ -54,6 +54,29 @@ def receive(balance: Balance, quantity: Decimal) -> Movement:
     after = Balance(balance.on_hand + quantity, balance.reserved)
     _ensure_representable(after)
     return Movement(on_hand_delta=quantity, reserved_delta=Decimal(0), after=after)
+
+
+def adjust(balance: Balance, delta: Decimal, decimal_places: int) -> Movement:
+    """ADJUSTMENT: on_hand +/-q, reserved unchanged. The result may never drop below what
+    is reserved for orders, so available stock never goes negative (D-20)."""
+    if delta == 0:
+        raise BusinessValidationError("INVALID_QUANTITY", "quantity_delta cannot be 0.")
+    ensure_scale(abs(delta), decimal_places, field="quantity_delta")
+    after = Balance(balance.on_hand + delta, balance.reserved)
+    if after.on_hand < balance.reserved:
+        raise ConflictError(
+            "ADJUSTMENT_BELOW_RESERVED",
+            "The adjustment would leave less stock on hand than is reserved.",
+            [
+                {
+                    "on_hand": format_quantity(balance.on_hand, decimal_places),
+                    "reserved": format_quantity(balance.reserved, decimal_places),
+                    "quantity_delta": format_quantity(delta, decimal_places),
+                }
+            ],
+        )
+    _ensure_representable(after)
+    return Movement(on_hand_delta=delta, reserved_delta=Decimal(0), after=after)
 
 
 def _ensure_representable(balance: Balance) -> None:

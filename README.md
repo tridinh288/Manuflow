@@ -6,7 +6,8 @@ This project is a student/personal simulation of an internal manufacturing manag
 > authentication, permissions, audit and idempotency; master data, versioned BOMs and
 > routings, BOM explosion). Phase 4 so far: an append-only inventory ledger and
 > idempotent stock receipts (`POST /api/v1/inventory/receipts`, `Idempotency-Key`
-> required), with deadlock retry.
+> required), with deadlock retry; signed stock adjustments with a mandatory reason that
+> can never leave less on hand than is reserved.
 
 ## Quick start
 

@@ -4,8 +4,8 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.errors import BusinessValidationError
-from app.domain.inventory import Balance, receive, validate_movement_quantity
+from app.domain.errors import BusinessValidationError, ConflictError
+from app.domain.inventory import Balance, adjust, receive, validate_movement_quantity
 
 
 def test_br_inv_03_receipt_moves_on_hand_only_and_reports_the_balance_after() -> None:
@@ -36,3 +36,24 @@ def test_br_inv_02_receipt_beyond_decimal_18_4_is_rejected() -> None:
     with pytest.raises(BusinessValidationError) as exc_info:
         receive(Balance(Decimal("99999999999999"), Decimal(0)), Decimal("1"))
     assert exc_info.value.code == "QUANTITY_TOO_LARGE"
+
+
+@pytest.mark.parametrize(
+    ("on_hand", "reserved", "delta", "after"),
+    [("100", "80", "-20", "80"), ("100", "0", "-100", "0"), ("5", "5", "10", "15")],
+)
+def test_d20_adjustment_keeps_on_hand_at_or_above_reserved(
+    on_hand: str, reserved: str, delta: str, after: str
+) -> None:
+    movement = adjust(Balance(Decimal(on_hand), Decimal(reserved)), Decimal(delta), 0)
+    assert movement.after == Balance(Decimal(after), Decimal(reserved))
+    assert movement.reserved_delta == 0
+
+
+@pytest.mark.parametrize(("on_hand", "reserved", "delta"), [("100", "80", "-21"), ("5", "0", "-6")])
+def test_br_inv_02_adjustment_below_reserved_is_refused(
+    on_hand: str, reserved: str, delta: str
+) -> None:
+    with pytest.raises(ConflictError) as exc_info:
+        adjust(Balance(Decimal(on_hand), Decimal(reserved)), Decimal(delta), 0)
+    assert exc_info.value.code == "ADJUSTMENT_BELOW_RESERVED"
