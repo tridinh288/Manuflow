@@ -81,7 +81,9 @@ def line(factory: sessionmaker[Session]) -> Iterator[Line]:
     yield Line(ids[0], ids[1])
     line_id, material_id, order_id, product_id = ids
     with factory() as session, session.begin():
-        session.execute(delete(ProductionOrderMaterial).where(ProductionOrderMaterial.id == line_id))
+        session.execute(
+            delete(ProductionOrderMaterial).where(ProductionOrderMaterial.id == line_id)
+        )
         session.execute(delete(ProductionOrder).where(ProductionOrder.id == order_id))
         session.execute(delete(Inventory).where(Inventory.material_id == material_id))
         session.execute(delete(Material).where(Material.id == material_id))
