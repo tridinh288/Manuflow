@@ -79,6 +79,9 @@ ENDPOINT_ACCESS: dict[tuple[str, str], AccessRule] = {
         Permission.OPERATION_REPORT
     ),
     ("GET", "/api/v1/dashboard/risks"): perm(Permission.DASHBOARD_READ),
+    ("GET", "/api/v1/dashboard/production"): perm(Permission.DASHBOARD_READ),
+    ("GET", "/api/v1/dashboard/bottlenecks"): perm(Permission.DASHBOARD_READ),
+    ("GET", "/api/v1/dashboard/material-alerts"): perm(Permission.DASHBOARD_READ),
     ("POST", "/api/v1/inventory/issues"): perm(Permission.INVENTORY_ISSUE),
     ("POST", "/api/v1/inventory/returns"): perm(Permission.INVENTORY_RETURN),
 }
@@ -273,6 +276,9 @@ PROTECTED_CALLS: list[Call] = [
         worker_scoped=True,
     ),
     Call("GET", "/api/v1/dashboard/risks"),
+    Call("GET", "/api/v1/dashboard/production"),
+    Call("GET", "/api/v1/dashboard/bottlenecks"),
+    Call("GET", "/api/v1/dashboard/material-alerts"),
     Call(
         "POST",
         "/api/v1/inventory/issues",

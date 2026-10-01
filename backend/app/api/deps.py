@@ -15,6 +15,7 @@ from app.domain.risk import RiskThresholds
 from app.services.auth_service import AuthenticatedUser, AuthService
 from app.services.bom_service import BomService
 from app.services.context import RequestContext
+from app.services.dashboard_service import DashboardService
 from app.services.inventory_service import InventoryService
 from app.services.master_data_service import MaterialService, ProductService, WorkCenterService
 from app.services.production_service import ProductionOrderService
@@ -132,3 +133,11 @@ def get_risk_service(
         shortage_alert=timedelta(days=settings.shortage_alert_days),
     )
     return RiskService(session, clock, thresholds)
+
+
+def get_dashboard_service(
+    session: Annotated[Session, Depends(get_session)],
+    clock: Annotated[Clock, Depends(get_clock)],
+    risks: Annotated[RiskService, Depends(get_risk_service)],
+) -> DashboardService:
+    return DashboardService(session, clock, risks)
