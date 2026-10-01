@@ -103,6 +103,16 @@ Mỗi mục ghi: AI đã viết gì, test hoặc review nào phát hiện, sửa
 - **Bài học:** test dạng "duyệt tất cả rồi khẳng định danh sách lỗi rỗng" phải khẳng định luôn rằng nó đã duyệt được thứ gì đó.
 - **PR:** phase-7/security-review.
 
+### 14. Property test xanh nhưng không kiểm được gì (Phase 7)
+
+- **AI viết:** property test Hypothesis cho kho. Test chạy chuỗi ngẫu nhiên các thao tác nhập / điều chỉnh / plan / check-materials / xuất / trả / hủy / start và kiểm tra BR-INV-02, BR-INV-04 sau mỗi bước. Test pass ngay.
+- **Phát hiện 1, bằng thống kê của Hypothesis (`--hypothesis-show-statistics`):** trong cả lần chạy, **không có lần xuất kho, trả kho hay start nào thành công**. Mỗi ví dụ bắt đầu với tồn bằng 0 nên lệnh gần như luôn thiếu hàng, và danh sách thao tác ngắn hiếm khi có "tạo lệnh rồi xuất". Test chỉ kiểm được nhập, điều chỉnh và các lệnh bị từ chối.
+- **Sửa 1:** thêm tồn đầu kỳ ngẫu nhiên, chuỗi dài hơn, tăng trọng số cho tạo lệnh, xuất toàn bộ và trả toàn bộ. Thêm ba chuỗi cố định (`@example`), cùng một test riêng khẳng định các chuỗi đó thực sự xuất kho, start, hủy, check-materials và trả kho thành công. Độ phủ giờ được khẳng định bằng test, không dựa vào may rủi.
+- **Phát hiện 2, bằng mutation:** 2/6 lỗi cấy vào vẫn qua: (a) cho phép trả nhiều hơn phần còn có thể trả (`q > issued` thay cho `q > issued − returned`); (b) quên cộng `returned_quantity` của dòng. Các bất biến chỉ nhìn số dư tồn kho, không đối chiếu bộ đếm của từng dòng lệnh với sổ cái, và không chuỗi nào trả hai lần trên cùng một dòng.
+- **Sửa 2:** thêm bất biến "với mỗi dòng của lệnh, `issued` = tổng ISSUE và `returned` = tổng RETURN trong sổ cái", và một chuỗi trả hai lần rồi trả thêm khi đã hết. Phá lại: 6/6 mutant fail.
+- **Bài học:** với test sinh dữ liệu ngẫu nhiên, phải đo xem dữ liệu sinh ra thực sự đi tới những nhánh nào, và cần một bất biến cho từng bộ đếm, không chỉ cho tổng số dư.
+- **PR:** phase-7/inventory-property-test.
+
 ## Rà soát đặc tả
 
 Ở bước rà soát (B20), AI tìm ra 10 điểm mâu thuẫn hoặc còn thiếu trong `docs/requirements.md`. Các điểm này được ghi lại cùng quyết định đã duyệt trong [`decisions.md`](decisions.md).
