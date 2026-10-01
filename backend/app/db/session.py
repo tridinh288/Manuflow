@@ -14,6 +14,9 @@ def build_engine(database_url: str) -> Engine:
         isolation_level="REPEATABLE READ",
         pool_pre_ping=True,
         pool_recycle=1800,
+        # B16: DB errors are logged with their traceback; bound values (password hashes,
+        # usernames) must not end up in that log.
+        hide_parameters=True,
         connect_args={
             # All timestamps are UTC (D-23), regardless of the server default.
             "init_command": "SET time_zone = '+00:00'",

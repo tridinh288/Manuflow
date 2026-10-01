@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.permissions import Role
 from app.domain.users import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, USERNAME_PATTERN
+from app.schemas.common import MAX_ID
 
 _NOT_NULLABLE = ("full_name", "role", "active", "password")
 
@@ -17,7 +18,7 @@ class UserCreateRequest(BaseModel):
     password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
     full_name: str = Field(min_length=1, max_length=100)
     role: Role
-    work_center_id: int | None = Field(default=None, gt=0)
+    work_center_id: int | None = Field(default=None, gt=0, le=MAX_ID)
 
 
 class UserUpdateRequest(BaseModel):
@@ -27,7 +28,7 @@ class UserUpdateRequest(BaseModel):
 
     full_name: str | None = Field(default=None, min_length=1, max_length=100)
     role: Role | None = None
-    work_center_id: int | None = Field(default=None, gt=0)
+    work_center_id: int | None = Field(default=None, gt=0, le=MAX_ID)
     active: bool | None = None
     password: str | None = Field(
         default=None, min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH

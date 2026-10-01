@@ -9,6 +9,7 @@ from app.domain.quantities import format_quantity
 from app.models.inventory_transaction import InventoryTransaction
 from app.models.master_data import Inventory, Material
 from app.repositories.inventory_repository import LedgerTotals
+from app.schemas.common import MAX_ID
 from app.services.inventory_service import (
     MovementResult,
     OrderMovementResult,
@@ -22,7 +23,7 @@ QuantityString = Annotated[str, StringConstraints(pattern=r"^\d{1,14}(\.\d{1,4})
 class ReceiptRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    material_id: int = Field(gt=0)
+    material_id: int = Field(gt=0, le=MAX_ID)
     quantity: QuantityString
     reference: str | None = Field(default=None, min_length=1, max_length=64)
 
@@ -35,7 +36,7 @@ SignedQuantityString = Annotated[
 class AdjustmentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    material_id: int = Field(gt=0)
+    material_id: int = Field(gt=0, le=MAX_ID)
     quantity_delta: SignedQuantityString  # negative decreases stock
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=500)]
 
@@ -198,7 +199,7 @@ class OrderMovementRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    order_material_id: int = Field(gt=0)
+    order_material_id: int = Field(gt=0, le=MAX_ID)
     quantity: QuantityString
 
 
