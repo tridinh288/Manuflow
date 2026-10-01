@@ -9,9 +9,10 @@
     "typecheck": "tsc -b",
     "lint": "oxlint src",
     "test": "vitest run",
-    "gen:api": "openapi-typescript ../docs/openapi.json -o src/api/schema.d.ts",
-    "check:api": "openapi-typescript ../docs/openapi.json -o src/api/schema.d.ts && git diff --exit-code -- src/api/schema.d.ts",
-    "preview": "vite preview"
+    "gen:api": "openapi-typescript ../docs/openapi.json -o src/api/schema.d.ts && node scripts/gen-enums.mjs",
+    "check:api": "npm run gen:api && git diff --exit-code -- src/api/schema.d.ts src/api/enums.ts",
+    "preview": "vite preview",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "axios": "^1.20.0",
@@ -20,6 +21,7 @@
     "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",

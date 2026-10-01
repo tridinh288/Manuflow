@@ -2,8 +2,8 @@
 
 This project is a student/personal simulation of an internal manufacturing management system. It models common workflows such as BOM management, material planning, inventory reservation, production planning, and workshop progress tracking. It is not a production ERP, and the author does not claim professional manufacturing experience.
 
-> Status: **MVP complete (Phases 1–7)**. The React frontend (Phase 8) and the AI assistant
-> (Phase 9) are optional extensions and not started.
+> Status: **MVP complete (Phases 1–7)** plus the demo UI (Phase 8, React). The AI assistant
+> (Phase 9) is an optional extension.
 
 ## The workflow
 
@@ -38,7 +38,13 @@ curl http://localhost:8000/health
 docker compose exec api python -m seed   # demo shop with 10 days of history
 ```
 
+Web UI: <http://localhost:5173> (the `web` service; log in with a demo account below).
 OpenAPI docs: <http://localhost:8000/docs>. MySQL is exposed on host port `3307`.
+
+The UI holds no business rules: menus follow the `permissions` of `/auth/me`, order
+buttons are exactly the `allowed_actions` the API returns, limits and progress come from
+the API, and every form sends a fresh `Idempotency-Key` (reused only on a retry). See
+[`frontend/README.md`](frontend/README.md).
 
 The seed only runs with `ENV=dev`, refuses a database that already holds data, and goes
 through the HTTP API with a clock that starts ten days ago, so the ledger, the audit log
@@ -78,8 +84,13 @@ docker compose exec api python -m app.cli create-user --username admin \
 
 ## Five-minute demo
 
-Order 7 goes from shortage to completed. The same sequence runs as a test on the seeded
-data (`tests/integration/test_seed.py::test_five_minute_demo_runs_on_the_seed`).
+Order 7 goes from shortage to completed. In the UI: log in as `demo.manager` (dashboard,
+order 7 short of steel), `demo.warehouse` (Tồn kho → receive 200 kg STEEL-001, order 7 →
+re-check, issue every line), `demo.manager` (start), then `demo.cut`, `demo.weld`,
+`demo.paint`, `demo.qc` (Work center của tôi → report), and `demo.admin` (audit log).
+The same flow runs as a browser test (`cd frontend && E2E_PASSWORD=... npm run e2e`) and,
+through the API, as `tests/integration/test_seed.py::test_five_minute_demo_runs_on_the_seed`.
+With `curl`:
 
 ```bash
 API=http://localhost:8000/api/v1
@@ -142,6 +153,8 @@ docker compose exec api pytest -q tests/unit           # pure domain logic, < 5 
 docker compose exec api pytest -q -m concurrency       # two real connections on two threads
 docker compose exec api python scripts/rule_coverage.py  # BR-xx -> tests
 docker compose exec api sh -c 'ruff check . && ruff format --check . && mypy'
+cd frontend && npm test && npm run typecheck && npm run lint   # UI components (Vitest)
+cd frontend && E2E_PASSWORD=... npm run e2e                     # demo in a real browser (Playwright, needs the seeded stack)
 ```
 
 | Level | What | How |
@@ -178,8 +191,10 @@ backend/
   seed/           demo shop
   scripts/        rule -> test coverage report
   tests/          unit/ api/ integration/ concurrency/
+frontend/         React + TypeScript demo UI; types generated from docs/openapi.json
+  e2e/            Playwright run of the five-minute demo
 docker/mysql/init/  creates databases and least-privilege DB users
-docs/               requirements, decisions, security review, AI usage, interview notes
+docs/               requirements, decisions, OpenAPI snapshot, security review, AI usage, interview notes
 ```
 
 ## AI-assisted development

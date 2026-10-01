@@ -6,6 +6,7 @@ import { api } from '../api/client'
 import type { Operations, Order, OrderMaterial, Page, Reservation } from '../api/types'
 import { useAuth } from '../auth/useAuth'
 import { ErrorBox } from '../components/ErrorBox'
+import { MoveStock } from '../components/MoveStock'
 import { ReportProgress } from '../components/ReportProgress'
 import { formatDate, percent } from '../lib/format'
 import { useApi } from '../lib/useApi'
@@ -269,49 +270,5 @@ function UpdateForm({
         {ACTION_LABELS.update}
       </button>
     </form>
-  )
-}
-
-/** ISSUE / RETURN for one order line; the server checks D-10 and the returnable amount. */
-function MoveStock({ line, onDone }: { line: OrderMaterial; onDone: () => void }) {
-  const { can } = useAuth()
-  const [quantity, setQuantity] = useState('')
-  const move = useSubmit(async ({ kind, qty }: { kind: 'issues' | 'returns'; qty: string }, key: string) => {
-    const response = await api.post(
-      `/inventory/${kind}`,
-      { order_material_id: line.id, quantity: qty },
-      { headers: { 'Idempotency-Key': key } },
-    )
-    return response.data as unknown
-  })
-
-  async function send(kind: 'issues' | 'returns', qty: string) {
-    if ((await move.submit({ kind, qty })) !== undefined) {
-      setQuantity('')
-      onDone()
-    }
-  }
-
-  return (
-    <div className="row">
-      <input
-        value={quantity}
-        onChange={(e) => setQuantity(e.target.value)}
-        placeholder={line.reserved_quantity}
-        aria-label={`Số lượng ${line.material_code}`}
-        size={8}
-      />
-      {can('inventory:issue') && (
-        <button disabled={move.busy} onClick={() => send('issues', quantity || line.reserved_quantity)}>
-          Xuất
-        </button>
-      )}
-      {can('inventory:return') && (
-        <button disabled={move.busy || !quantity} onClick={() => send('returns', quantity)}>
-          Trả
-        </button>
-      )}
-      <ErrorBox error={move.error} />
-    </div>
   )
 }

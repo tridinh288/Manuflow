@@ -54,3 +54,8 @@ api.interceptors.response.use(
     return Promise.reject(error)
   },
 )
+
+/** Request options carrying the submission's Idempotency-Key (B17, D-22). */
+export function idem(key: string) {
+  return { headers: { 'Idempotency-Key': key } }
+}

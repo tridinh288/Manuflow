@@ -3,21 +3,14 @@ import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { api } from '../api/client'
-import type { Order, OrderStatus, Page, Product } from '../api/types'
+import { OrderStatusValues } from '../api/enums'
+import type { Order, Page, Product } from '../api/types'
 import { useAuth } from '../auth/useAuth'
 import { ErrorBox } from '../components/ErrorBox'
 import { formatDate } from '../lib/format'
 import { useApi } from '../lib/useApi'
 import { useSubmit } from '../lib/useSubmit'
 
-const STATUSES: OrderStatus[] = [
-  'DRAFT',
-  'MATERIAL_SHORTAGE',
-  'READY_TO_PRODUCE',
-  'IN_PROGRESS',
-  'COMPLETED',
-  'CANCELLED',
-]
 
 export function OrdersPage() {
   const { can } = useAuth()
@@ -37,7 +30,7 @@ export function OrdersPage() {
             Trạng thái
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="">Tất cả</option>
-              {STATUSES.map((s) => (
+              {OrderStatusValues.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
